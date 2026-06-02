@@ -1,8 +1,8 @@
 # App Assets (PoH Wallet)
 
-**Current status**: Placeholder icons have been created so builds don't fail immediately.
+**Current status**: Real PoH logo (from network/brain SVG) has been added.
 
-**You MUST replace them with the real PoH logo** before making a proper release APK.
+The icons are now using the official PoH logo (green network/brain on dark background).
 
 ## Required files (replace these)
 
@@ -12,15 +12,18 @@
 | `adaptive-icon.png`     | 1024×1024        | **Must have transparent background**. This is the foreground for Android adaptive icons |
 | `splash.png`            | ~1242×2436       | Splash screen (optional but recommended)                              |
 | `favicon.png`           | 192×192          | Used for web version                                                  |
+| `logo.png`              | 256×256          | In-app logo (e.g. in Header) - using official PoH network logo        |
 
-## How to prepare the PoH logo
+## PoH Logo
 
-1. Take your PoH logo (preferably on transparent background for adaptive icon).
-2. Recommended tools:
+The official PoH logo (from the miner network SVG - green network/brain on dark) has been added to all required asset files using the 1024px and 256px renders.
+
+If you ever need to regenerate from the SVG:
+- Use the generate-icons.js from the network project, or online tools listed below.
+- Recommended tools:
    - https://icon.kitchen
    - https://appicon.co
    - https://easysize.io (good for adaptive icons)
-3. Generate Expo assets and replace the files in this folder.
 
 ## Build Configuration
 
@@ -44,4 +47,4 @@ The resulting APK will have:
 
 ---
 
-**Note**: The current files in this folder are tiny placeholder PNGs. They will work for testing builds but look bad. Replace them before distributing the app.
+**Note**: The icons now use the real PoH logo (green network/brain design matching the miner network branding). Ready for builds.

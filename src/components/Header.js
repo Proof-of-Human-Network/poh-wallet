@@ -1,10 +1,17 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 
 export default function Header({ title, onSettingsPress, t }) {
   return (
     <View style={styles.header}>
-      <Text style={styles.title}>{title || (t ? t('app.title') : 'POH Wallet')}</Text>
+      <View style={styles.titleRow}>
+        <Image 
+          source={require('../../assets/logo.png')} 
+          style={styles.logo} 
+          resizeMode="contain"
+        />
+        <Text style={styles.title}>{title || (t ? t('app.title') : 'POH Wallet')}</Text>
+      </View>
       <TouchableOpacity onPress={onSettingsPress}>
         <Text style={styles.settingsLink}>
           {t ? t('nav.settings') : 'Settings'}
@@ -20,6 +27,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logo: {
+    width: 28,
+    height: 28,
+    marginRight: 8,
   },
   title: {
     fontSize: 26,
