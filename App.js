@@ -265,37 +265,32 @@ export default function PoHMinerWallet() {
     }
   }
 
-  // ===== Node communication with retry + failover =====
-  async function callNodeApi(path, options = {}, retries = 1) {
-    const currentUrl = activeNodeUrl;
-    if (!currentUrl) throw new Error('No active node configured');
+  // ===== Node communication with automatic peer failover =====
+  // Tries the active node first, then each remaining peer in latency order.
+  async function callNodeApi(path, options = {}, _tried = null) {
+    const tried = _tried || new Set();
+    const urlToTry = tried.size === 0 ? activeNodeUrl : null;
 
-    const fullUrl = `${currentUrl.replace(/\/$/, '')}${path}`;
+    // Pick next candidate: active node first, then untried peers by latency
+    const candidate = urlToTry ||
+      [...nodes]
+        .sort((a, b) => (a.lastLatency || 9999) - (b.lastLatency || 9999))
+        .map(n => n.url)
+        .find(u => !tried.has(u));
 
+    if (!candidate) throw new Error('All nodes unreachable');
+
+    tried.add(candidate);
     try {
-      const res = await fetch(fullUrl, options);
+      const res = await fetch(`${candidate.replace(/\/$/, '')}${path}`, options);
+      // If we failed over to a different node, persist the switch
+      if (candidate !== activeNodeUrl) {
+        setActiveNodeUrl(candidate);
+        await Storage.saveActiveNodeUrl(candidate);
+      }
       return res;
-    } catch (err) {
-      if (retries > 0) {
-        await new Promise(r => setTimeout(r, 600));
-        return callNodeApi(path, options, retries - 1);
-      }
-
-      // Failover logic
-      if (nodes.length > 1) {
-        const otherNodes = nodes.filter(n => n.url !== currentUrl);
-        if (otherNodes.length > 0) {
-          const sorted = [...otherNodes].sort((a, b) => (a.lastLatency || 9999) - (b.lastLatency || 9999));
-          const nextNode = sorted[0];
-
-          setActiveNodeUrl(nextNode.url);
-          await Storage.saveActiveNodeUrl(nextNode.url);
-
-          return callNodeApi(path, options, 1);
-        }
-      }
-
-      throw err;
+    } catch {
+      return callNodeApi(path, options, tried);
     }
   }
 
