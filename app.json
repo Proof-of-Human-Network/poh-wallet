@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "PoH Wallet",
+    "slug": "poh-wallet",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.poh.wallet"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#000000"
+      },
+      "package": "com.poh.wallet",
+      "versionCode": 1
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "description": "PoH Miner Wallet - Real crypto wallet for the Proof of Humanity network",
+    "githubUrl": "https://github.com/your-org/poh-miner",
+    "extra": {
+      "eas": {
+        "projectId": "2755d9de-0219-47c3-b393-4bade5b8515f"
+      }
+    }
+  }
+}
