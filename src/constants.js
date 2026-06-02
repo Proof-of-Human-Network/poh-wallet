@@ -6,6 +6,7 @@ export const STORAGE_KEYS = {
   ACTIVE_NODE_URL: 'poh_active_node_url_v1',
   LOCAL_TXS: 'poh_local_txs_v2',
   LANG: 'poh_lang_v1',
+  NODE_URL: 'poh_node_url_v1', // legacy (pre multi-node support)
 };
 
 // Default public / bootstrap wallet RPC nodes (used when the user has none configured)
