@@ -20,11 +20,7 @@ import {
   generateNewWallet,
 } from './src/services/wallet';
 import {
-  pingNode,
   selectBestNode,
-  callNodeApi,
-  fetchBalance,
-  fetchTransactions,
 } from './src/services/nodeClient';
 import * as Storage from './src/services/storage';
 
@@ -36,6 +32,7 @@ import {
   HistoryScreen,
   WalletsScreen,
   SettingsScreen,
+  AIScreen,
 } from './src/screens';
 
 // Keep the splash screen visible while we load fonts
@@ -120,14 +117,18 @@ export default function PoHMinerWallet() {
 
   async function loadPersisted() {
     try {
-      const [wStr, sel, nodesStr, activeUrl, lTxStr, oldNodeUrl] = await Promise.all([
+      const [wStr, sel, nodesStr, activeUrl, lTxStr] = await Promise.all([
         AsyncStorage.getItem(STORAGE_KEYS.WALLETS),
         AsyncStorage.getItem(STORAGE_KEYS.SELECTED),
         AsyncStorage.getItem(STORAGE_KEYS.NODES),
         AsyncStorage.getItem(STORAGE_KEYS.ACTIVE_NODE_URL),
         AsyncStorage.getItem(STORAGE_KEYS.LOCAL_TXS),
-        AsyncStorage.getItem(STORAGE_KEYS.NODE_URL), // legacy
       ]);
+      // Legacy migration key (may not exist)
+      let oldNodeUrl = null;
+      try {
+        oldNodeUrl = await AsyncStorage.getItem(STORAGE_KEYS.NODE_URL);
+      } catch (_) {}
 
       if (wStr) {
         const list = JSON.parse(wStr);
@@ -785,25 +786,38 @@ export default function PoHMinerWallet() {
     </View>
   );
 
-  const TabBar = () => (
-    <View style={styles.tabBar}>
-      {[
-        { key: 'home', label: t('tab.home') },
-        { key: 'send', label: t('tab.send') },
-        { key: 'receive', label: t('tab.receive') },
-        { key: 'history', label: t('tab.history') },
-        { key: 'wallets', label: t('tab.wallets') },
-      ].map(tab => (
-        <TouchableOpacity
-          key={tab.key}
-          style={[styles.tab, currentScreen === tab.key && styles.tabActive]}
-          onPress={() => setCurrentScreen(tab.key)}
-        >
-          <Text style={[styles.tabText, currentScreen === tab.key && styles.tabTextActive]}>{tab.label}</Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
+  const TabBar = () => {
+    const tabs = [
+      { key: 'home', label: t('tab.home') },
+      { key: 'history', label: t('tab.history') },
+      { key: 'search', label: 'AI' },
+      { key: 'wallets', label: t('tab.wallets') },
+    ];
+
+    return (
+      <View style={styles.tabBar}>
+        {tabs.map(tab => {
+          const isActive = currentScreen === tab.key;
+          const isSearch = tab.key === 'search';
+          const tabStyle = isSearch
+            ? [styles.centerTab, isActive && styles.tabActive]
+            : [styles.tab, isActive && styles.tabActive];
+          const textStyle = isSearch
+            ? [styles.centerTabText, isActive && styles.tabTextActive]
+            : [styles.tabText, isActive && styles.tabTextActive];
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={tabStyle}
+              onPress={() => setCurrentScreen(tab.key)}
+            >
+              <Text style={textStyle}>{tab.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    );
+  };
 
   // ===== SCREENS =====
 
@@ -1059,6 +1073,19 @@ export default function PoHMinerWallet() {
         <TouchableOpacity style={styles.secondaryBtn} onPress={() => setCurrentScreen('home')}>
           <Text>{t('wallets.done')}</Text>
         </TouchableOpacity>
+        <TabBar />
+      </SafeAreaView>
+    );
+  }
+
+  if (currentScreen === 'search') {
+    return (
+      <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
+        <StatusBar barStyle="light-content" />
+        <Header title="AI" />
+        <View style={{ flex: 1 }}>
+          <AIScreen t={t} wallets={wallets} selectedAddress={selectedAddress} balances={balances} setSelectedAddress={setSelectedAddress} saveSelectedAddress={saveSelected} />
+        </View>
         <TabBar />
       </SafeAreaView>
     );
@@ -1373,9 +1400,19 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 20, // safe area for home indicator / gesture bar
   },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: 10 },
+  tab: { flex: 1, alignItems: 'center', paddingVertical: 10, paddingHorizontal: 6 },
+  centerTab: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    borderRadius: 999,
+    backgroundColor: '#111',
+  },
   tabActive: { borderTopWidth: 3, borderTopColor: '#22c55e' },
   tabText: { color: '#888', fontSize: 12, fontFamily: 'Iceland_400Regular' },
+  centerTabText: { color: '#888', fontSize: 12, fontFamily: 'Iceland_400Regular', fontWeight: '600' },
   tabTextActive: { color: '#22c55e', fontWeight: '600', fontFamily: 'Iceland_400Regular' },
   langRow: { backgroundColor: '#111', padding: 12, borderRadius: 8, marginBottom: 6, flexDirection: 'row', alignItems: 'center' },
   langRowActive: { borderColor: '#22c55e', borderWidth: 2 },
