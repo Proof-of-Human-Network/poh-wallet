@@ -1,117 +1,133 @@
-# PoH Miner Wallet (React Native)
+# PoH Miner Wallet
 
-Real POH crypto wallet for the PoH Miner Network.
-
-Connects to any running miner node (port 3456 by default) for **live balances**, **real sends**, transaction history, and notifications.
+React Native mobile wallet for the PoH Miner Network. Connects to any running miner node for live balances, token transfers, transaction history, and AI-powered identity scanning.
 
 ## Features
-- Create new address (node-compatible derivation using SHA256)
-- Import by private key (paste the hex from CLI or another device)
-- Live balance polling from the node every ~8 seconds
-- Send POH — calls the real `POST /api/wallet/send` on your node
-- Receive screen with copyable address
-- Full Tx history (node + local pending, merged)
-- Local push notifications on send success and incoming funds
-- Persistent wallets + selected wallet + node URL (AsyncStorage + SecureStore for keys)
-- Tab bar navigation (Home / Send / Receive / History / Wallets / Node settings)
 
-## Important Demo Notes
-- Real sends only succeed when the **from** address exists in the target node's `~/.poh-miner/wallets/` directory.
-  - Easy flow: On the machine running the node, run `poh-miner wallet create`, then import the **same private key** you have in the mobile app.
-
-## Code Structure (2026 Refactor)
-
-The app was originally one giant `App.js` (>3200 lines). It has been restructured for open source:
-
-See [RESTRUCTURE.md](./RESTRUCTURE.md) for the new `src/` layout (services, i18n, screens, components).
-
-This makes the codebase much more maintainable and contributor-friendly while preserving all functionality (multi-node failover, full 20-language live i18n, real crypto wallet behavior, etc.).
-  - Or send from the miner's own reward wallet address.
-- This is a lightweight client talking to the node's simple ledger API. Full signed on-chain txs will come later.
+- **Multi-wallet** — create or import any number of PoH addresses
+- **Live balance** — polls the connected miner node every ~8 s
+- **Send / Receive** — real on-chain signed transfers with QR scan
+- **Transaction history** — node history merged with local pending txs
+- **AI Screen** — submit wallet addresses for human/AI identity verification; displays verdict, confidence, sanctions check (OFAC, EU, UK), and full PoH profile
+- **Multi-node failover** — connects to the fastest available node; auto-switches on failure
+- **IPFS peer discovery** — when no node is configured or all nodes are offline, discovers active miners from the IPFS peer directory published by the bootnode
+- **16 languages** — full live i18n (English, French, Chinese, Spanish, Hindi, Russian, Arabic, and more)
+- **Push notifications** — on send success and incoming funds
 
 ## Quick Start
 
-1. Install dependencies (from the `poh-miner-wallet` folder):
-
 ```bash
-npx expo install expo-crypto expo-notifications expo-secure-store @react-native-async-storage/async-storage
-```
-
-2. Start the wallet:
-
-```bash
+cd poh-miner-wallet
+npm install
 npx expo start
 ```
 
-3. Run a miner node somewhere (it starts the Wallet API on :3456 automatically).
+Scan the QR code with **Expo Go** (iOS/Android) or press `a` for Android emulator.
 
-4. In the wallet → Node tab, set the URL (e.g. `http://192.168.1.50:3456` or `http://localhost:3456` for same machine testing).
+## Building an APK
 
-5. Create or import a wallet. Send/receive against the node.
+Uses [EAS Build](https://expo.dev/eas) (free account required):
 
-## Building an Android APK
+```bash
+npm install -g eas-cli
+eas login
+eas build -p android --profile preview   # produces a .apk
+```
 
-The recommended way to build a standalone `.apk` is using **EAS Build**.
+The `preview` profile in `eas.json` sets `buildType: "apk"` — no Play Store signing needed.
 
-### Prerequisites
-- An [Expo account](https://expo.dev) (free)
-- Node.js installed
+For a production `.aab` for the Play Store:
 
-### Step-by-step (Recommended)
+```bash
+eas build -p android --profile production
+```
 
-1. **Go to the wallet directory**
-   ```bash
-   cd Desktop/poh/miner/poh-miner-wallet
-   ```
+## Connecting to a Miner Node
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+The wallet communicates with any `poh-miner-network` node over HTTP.
 
-3. **Install EAS CLI globally** (if you haven't already)
-   ```bash
-   npm install -g eas-cli
-   ```
+**Default node:** `https://miner.proofofhuman.ge`
 
-4. **Log in to Expo**
-   ```bash
-   eas login
-   ```
+To add your own node: **Settings → Nodes → Add** (e.g. `http://192.168.1.100:3456`).
 
-5. **Configure EAS for the first time** (creates `eas.json` and `app.json`)
-   ```bash
-   eas build:configure
-   ```
-   - Select **Android** when prompted.
+The wallet tries all configured nodes in parallel and connects to whichever responds first. If all fail, it falls back to IPFS peer discovery.
 
-6. **Build the APK**
-   ```bash
-   eas build -p android --profile preview
-   ```
+### Node API used by the wallet
 
-   The `--profile preview` gives you a standard `.apk` that can be installed directly on Android devices (no Google Play signing required).
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/wallet/balance?address=` | Live balance |
+| `GET /api/wallet/transactions?address=` | Transaction list |
+| `POST /api/wallet/send` | Submit transfer |
+| `POST /job` | Submit AI identity scan |
+| `GET /job/:id/status` | Poll scan status |
+| `GET /job/:id/result` | Full verdict + profile + evidence |
+| `GET /status` | Node info (chain height, reputation) |
+| `POST /api/chat` | Chat with the node's local LLM |
+| `GET /api/brain/state` | Brain weights / feedback summary |
+| `POST /api/brain/feedback` | Submit human correction |
 
-7. **Download the APK**
-   - Once the build finishes, EAS will provide a download link.
-   - Download the `.apk` file.
-   - Rename it to `poh-miner-wallet.apk` for consistency.
+## IPFS Fallback
 
-8. **Place it in the landing page** (so the download button works)
-   ```bash
-   cp poh-miner-wallet.apk ../poh-miner-network/landing/binaries/
-   ```
+When the configured nodes are unreachable, the wallet queries the bootnode for the latest IPFS CIDs and downloads the peer directory from public IPFS gateways (ipfs.io, cloudflare-ipfs.com). This gives the wallet a fresh list of active miner nodes with their `host:port` addresses.
 
-### Alternative: Local Build
+```
+wallet → GET bootnode/ipfs/latest → { peers: { cid } }
+       → fetch ipfs.io/ipfs/<cid>  → [{host, walletApiPort, wallet, region}]
+       → try each peer as an RPC node
+```
 
-If you prefer to build locally without EAS cloud:
+## AI Screen
 
-- Set up Android Studio + Android SDK
-- Run `npx expo prebuild` to generate native Android project
-- Open the `android/` folder in Android Studio and build the APK from there
+The **AI** tab lets you scan any blockchain address for its Proof of Humanity identity:
 
-This is more involved but gives you full control.
+1. Enter an address (paste or scan QR)
+2. The wallet submits a job to the connected miner node
+3. The miner runs the full PoH checker (100+ signals across EVM, Solana, Bitcoin, TON, TRON, Stellar) and the AI brain
+4. Results show: **HUMAN / AI / UNCERTAIN** verdict with confidence, sanctions check (OFAC, EU, UK), and detailed signal evidence
+5. You can submit feedback to correct the AI verdict — this is relayed to the miner network and improves brain weights globally
 
----
+## Project Structure
 
-This is the real-feeling POH coin wallet for the network — send, receive, balance updates, tx log, notifications, create/import all work.
+```
+src/
+  screens/
+    HomeScreen.js        Balance, recent activity, quick actions
+    SendScreen.js        Transfer with address book
+    ReceiveScreen.js     QR code display
+    HistoryScreen.js     Transaction log
+    WalletsScreen.js     Multi-wallet manager
+    SettingsScreen.js    Node config, language
+    AIScreen.js          Identity scanner + sanctions check
+  services/
+    nodeClient.js        Multi-node HTTP client + IPFS fallback
+    wallet.js            Key generation, signing, storage
+    storage.js           AsyncStorage wrappers
+  i18n/
+    translations.js      16 languages
+  components/
+    Header.js            Logo + title
+    TabBar.js            Bottom navigation
+  constants.js           Default nodes, storage keys
+App.js                   Root component
+```
+
+## Transactions
+
+Transfers are signed `PoHTransaction` objects:
+
+```json
+{
+  "from": "poh...",
+  "to": "poh...",
+  "amount": 100000000,
+  "fee": 0,
+  "nonce": 3,
+  "timestamp": 1234567890,
+  "txHash": "sha256...",
+  "signature": "base64...",
+  "signingPublicKey": "-----BEGIN PUBLIC KEY-----..."
+}
+```
+
+`nonce` is the sender's transaction count — prevents replay attacks. The miner node validates `nonce === account.nonce + 1` before applying. Amounts are in **μPOH** (1 POH = 1,000,000,000 μPOH).
