@@ -21,25 +21,43 @@ async function fetchIPFSJSON(cid) {
 }
 
 /**
- * Query the bootnode for the latest IPFS CIDs, then fetch the chain snapshot
- * and return the peer list embedded in it.
- * Returns [] if IPFS is unreachable or no snapshot is available.
+ * Query the bootnode for the latest IPFS CIDs, then fetch the peer directory
+ * (which contains actual host:walletApiPort connection info).
+ *
+ * Falls back to the chain snapshot (wallet addresses only) when no peer
+ * directory CID is available.
+ *
+ * Returns [] if IPFS is unreachable or no data is available.
  */
 export async function discoverPeersFromIPFS() {
   try {
     const reg = await fetch(`${BOOTNODE_URL}/ipfs/latest`, { signal: AbortSignal.timeout(8000) })
       .then(r => r.ok ? r.json() : null).catch(() => null);
-    if (!reg?.chain?.cid) return [];
 
-    const snap = await fetchIPFSJSON(reg.chain.cid);
-    if (!snap?.blocks?.length) return [];
+    // Preferred: peer directory (has host + port)
+    if (reg?.peers?.cid) {
+      const dir = await fetchIPFSJSON(reg.peers.cid);
+      if (Array.isArray(dir?.peers) && dir.peers.length) {
+        return dir.peers.map(p => ({
+          url:    `http://${p.host}:${p.walletApiPort}`,
+          name:   p.wallet?.slice(0, 14) + '…',
+          wallet: p.wallet,
+          region: p.region || null,
+          source: 'ipfs-directory',
+        }));
+      }
+    }
 
-    // Extract unique miner wallets from the snapshot and turn them into
-    // synthetic node entries that the wallet can try to connect to.
-    // In production the snapshot would include host:port; for now we
-    // surface the wallets so the UI can show network activity.
-    const wallets = [...new Set(snap.blocks.map(b => b.minerWallet).filter(Boolean))];
-    return wallets.map(w => ({ wallet: w, source: 'ipfs', cid: reg.chain.cid }));
+    // Fallback: chain snapshot (wallet addresses only — no URLs)
+    if (reg?.chain?.cid) {
+      const snap = await fetchIPFSJSON(reg.chain.cid);
+      if (snap?.blocks?.length) {
+        const wallets = [...new Set(snap.blocks.map(b => b.minerWallet).filter(Boolean))];
+        return wallets.map(w => ({ wallet: w, source: 'ipfs-chain', cid: reg.chain.cid }));
+      }
+    }
+
+    return [];
   } catch { return []; }
 }
 
