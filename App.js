@@ -51,6 +51,19 @@ Notifications.setNotificationHandler({
 // deriveFromPrivateKey and generateNewWallet have been moved to src/services/wallet.js
 // (imported at the top of this file)
 
+async function registerPushToken(walletAddress, nodeUrl) {
+  try {
+    const token = await AsyncStorage.getItem('poh_push_token');
+    if (!token || !walletAddress || !nodeUrl) return;
+    const base = nodeUrl.replace(/\/$/, '');
+    await fetch(`${base}/api/push/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: walletAddress, token, platform: Platform.OS }),
+    });
+  } catch { /* non-fatal */ }
+}
+
 async function showNotification(title, body) {
   try {
     await Notifications.scheduleNotificationAsync({
@@ -363,7 +376,7 @@ export default function PoHMinerWallet() {
     };
   }, [currentScreen, selectedAddress, activeNodeUrl]);
 
-  // Initial load + notification permission
+  // Initial load + notification permission + push token registration
   useEffect(() => {
     loadPersisted();
 
@@ -372,10 +385,26 @@ export default function PoHMinerWallet() {
         const { status } = await Notifications.requestPermissionsAsync();
         if (status !== 'granted') {
           console.log('Notification permission not granted');
+          return;
+        }
+        // Get Expo push token and upload to the active node so the server
+        // can send custom push messages to this wallet.
+        const tokenData = await Notifications.getExpoPushTokenAsync();
+        const token = tokenData?.data;
+        if (token) {
+          await AsyncStorage.setItem('poh_push_token', token);
+          // Upload is deferred until we have an active node (handled in registerPushToken)
         }
       } catch (_) {}
     })();
   }, []);
+
+  // Register push token with the active node whenever wallet or node changes
+  useEffect(() => {
+    if (selectedAddress && activeNodeUrl) {
+      registerPushToken(selectedAddress, activeNodeUrl).catch(() => {});
+    }
+  }, [selectedAddress, activeNodeUrl]);
 
   // When selected changes, refresh
   useEffect(() => {
