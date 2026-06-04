@@ -37,5 +37,11 @@ allprojects {
         google()
         mavenCentral()
         maven { url 'https://www.jitpack.io' }
+        maven {
+            // expo-camera ships cameraview AAR in its own local maven repo;
+            // Gradle 7+ ignores subproject-level repositories blocks so we
+            // must declare it here at the root level.
+            url(new File(['node', '--print', "require.resolve('expo-camera/package.json')"].execute(null, rootDir).text.trim(), '../android/maven'))
+        }
     }
 }

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TextInput, Alert, TouchableOpacity,
-  FlatList, ActivityIndicator, SafeAreaView, StatusBar, ScrollView, Platform
+  FlatList, ActivityIndicator, SafeAreaView, StatusBar, ScrollView, Platform, Modal
 } from 'react-native';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
@@ -105,6 +106,8 @@ export default function PoHMinerWallet() {
   const [lastSync, setLastSync] = useState(null);
   const [language, setLanguage] = useState('en');
   const [settingsTab, setSettingsTab] = useState('nodes'); // 'nodes' | 'language' | 'danger'
+  const [sendQrVisible, setSendQrVisible] = useState(false);
+  const [sendCamPermission, requestSendCamPermission] = useCameraPermissions();
 
   const pollRef = useRef(null);
   const prevBalanceRef = useRef(0);
@@ -801,41 +804,37 @@ export default function PoHMinerWallet() {
     }
   };
 
-  const Header = () => (
+  const Header = ({ title }) => (
     <View style={styles.header}>
-      <Text style={styles.title}>{t('app.title')}</Text>
+      <Text style={styles.title}>{title || t('app.title')}</Text>
       <TouchableOpacity onPress={() => setCurrentScreen('settings')}>
-        <Text style={{ color: '#22c55e', fontWeight: '600' }}>{t('nav.settings')}</Text>
+        <Text style={styles.settingsIcon}>⚙</Text>
       </TouchableOpacity>
     </View>
   );
 
   const TabBar = () => {
     const tabs = [
-      { key: 'home', label: t('tab.home') },
-      { key: 'history', label: t('tab.history') },
-      { key: 'search', label: 'AI' },
-      { key: 'wallets', label: t('tab.wallets') },
+      { key: 'home',     icon: '●', iconOff: '○', label: t('tab.home') },
+      { key: 'history',  icon: '⇄', iconOff: '⇄', label: t('tab.history') },
+      { key: 'search',   icon: '⊙', iconOff: '⊙', label: 'Scan' },
+      { key: 'settings', icon: '⚙', iconOff: '⚙', label: 'Settings' },
     ];
 
     return (
       <View style={styles.tabBar}>
         {tabs.map(tab => {
-          const isActive = currentScreen === tab.key;
-          const isSearch = tab.key === 'search';
-          const tabStyle = isSearch
-            ? [styles.centerTab, isActive && styles.tabActive]
-            : [styles.tab, isActive && styles.tabActive];
-          const textStyle = isSearch
-            ? [styles.centerTabText, isActive && styles.tabTextActive]
-            : [styles.tabText, isActive && styles.tabTextActive];
+          const isActive = currentScreen === tab.key || (tab.key === 'settings' && currentScreen === 'wallets');
           return (
             <TouchableOpacity
               key={tab.key}
-              style={tabStyle}
+              style={styles.tab}
               onPress={() => setCurrentScreen(tab.key)}
             >
-              <Text style={textStyle}>{tab.label}</Text>
+              <Text style={[styles.tabIcon, isActive && styles.tabIconActive]}>
+                {isActive ? tab.icon : tab.iconOff}
+              </Text>
+              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{tab.label}</Text>
             </TouchableOpacity>
           );
         })}
@@ -851,30 +850,49 @@ export default function PoHMinerWallet() {
         <StatusBar barStyle="light-content" />
         <Header />
 
+        {/* Balance card */}
         <View style={styles.card}>
-          <Text style={styles.label}>{t('home.balance')}</Text>
-          <Text style={styles.balance}>{currentBalance.toFixed(2)} POH</Text>
-          <TouchableOpacity onPress={copyAddress}>
-            <Text style={styles.address} numberOfLines={1}>{selectedAddress || t('home.no_wallet')}</Text>
-          </TouchableOpacity>
-          {loading && <ActivityIndicator color="#22c55e" style={{ marginTop: 6 }} />}
-          {lastSync && <Text style={styles.sync}>{t('home.last_sync')}: {lastSync.toLocaleTimeString()}</Text>}
+          <Text style={styles.label}>AVAILABLE BALANCE</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: 6 }}>
+            <Text style={styles.balance}>{currentBalance.toFixed(2)}</Text>
+            <Text style={styles.balanceCurrency}> POH</Text>
+          </View>
+          <Text style={styles.usd}>≈ ${(currentBalance * 1.50).toFixed(2)} USD</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+            {loading && <ActivityIndicator color="#22c55e" size="small" style={{ marginRight: 8 }} />}
+            <TouchableOpacity onPress={copyAddress} style={{ flex: 1 }}>
+              <Text style={styles.addressSmall} numberOfLines={1}>
+                {selectedAddress
+                  ? `${selectedAddress.slice(0, 8)}…${selectedAddress.slice(-6)}`
+                  : t('home.no_wallet')}
+              </Text>
+            </TouchableOpacity>
+            {lastSync && <Text style={styles.sync}>{lastSync.toLocaleTimeString()}</Text>}
+          </View>
         </View>
 
+        {/* Action row */}
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => setCurrentScreen('receive')}>
-            <Text style={styles.actionText}>{t('action.receive')}</Text>
-          </TouchableOpacity>
           <TouchableOpacity style={styles.actionBtn} onPress={() => setCurrentScreen('send')}>
+            <Text style={styles.actionIcon}>↑</Text>
             <Text style={styles.actionText}>{t('action.send')}</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => setCurrentScreen('receive')}>
+            <Text style={styles.actionIcon}>↓</Text>
+            <Text style={styles.actionText}>{t('action.receive')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => setCurrentScreen('search')}>
+            <Text style={[styles.actionIcon, { color: '#22c55e' }]}>⊙</Text>
+            <Text style={styles.actionText}>Scan</Text>
+          </TouchableOpacity>
         </View>
 
+        {/* Recent */}
         <View style={styles.section}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={styles.sectionTitle}>{t('home.recent_activity')}</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <Text style={styles.sectionTitle}>RECENT</Text>
             <TouchableOpacity onPress={() => refreshAll(false)}>
-              <Text style={{ color: '#22c55e' }}>{t('home.refresh')}</Text>
+              <Text style={{ color: '#22c55e', fontSize: 11, fontFamily: 'Iceland_400Regular' }}>{t('home.refresh')}</Text>
             </TouchableOpacity>
           </View>
           <FlatList
@@ -883,24 +901,37 @@ export default function PoHMinerWallet() {
             contentContainerStyle={{ paddingBottom: 20 }}
             renderItem={({ item }) => {
               const isOut = item.from === selectedAddress;
-              const sign = isOut ? '-' : '+';
+              const isMining = item.type === 'mining' || item.type === 'reward';
               const counterparty = isOut ? item.to : item.from;
               return (
                 <View style={styles.txRow}>
-                  <Text style={styles.txType}>{item.type || t('history.tx')}</Text>
-                  <Text style={styles.txAmount}>{sign}{Number(item.amount || 0).toFixed(2)}</Text>
-                  <Text style={styles.txStatus}>{item.status || t('status.confirmed')}</Text>
-                  <Text style={styles.txAddr} numberOfLines={1}>{counterparty}</Text>
+                  <View style={[styles.txCircle, isOut && { backgroundColor: '#160a0a' }]}>
+                    <Text style={{ fontSize: 13, color: isMining ? '#22c55e' : isOut ? '#ef4444' : '#22c55e' }}>
+                      {isMining ? '⛏' : isOut ? '↑' : '↓'}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.txType}>{item.type || (isOut ? t('history.sent') : t('history.received'))}</Text>
+                    <Text style={styles.txAddr} numberOfLines={1}>
+                      {counterparty ? `${counterparty.slice(0, 8)}…${counterparty.slice(-4)}` : (item.status || t('status.confirmed'))}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={[styles.txAmount, isOut && { color: '#ef4444' }]}>
+                      {isOut ? '-' : '+'}{Number(item.amount || 0).toFixed(2)}
+                    </Text>
+                    <Text style={styles.txStatus}>POH</Text>
+                  </View>
                 </View>
               );
             }}
-            ListEmptyComponent={<Text style={{ color: '#555', marginTop: 8 }}>{t('home.no_tx')}</Text>}
+            ListEmptyComponent={
+              <Text style={{ color: '#374151', marginTop: 8, fontSize: 12, fontFamily: 'Iceland_400Regular' }}>
+                {t('home.no_tx')}
+              </Text>
+            }
           />
         </View>
-
-        <TouchableOpacity style={styles.secondaryBtn} onPress={() => setCurrentScreen('wallets')}>
-          <Text style={{ color: '#22c55e' }}>{t('home.manage_wallets', { count: wallets.length })}</Text>
-        </TouchableOpacity>
 
         <TabBar />
       </SafeAreaView>
@@ -908,43 +939,130 @@ export default function PoHMinerWallet() {
   }
 
   if (currentScreen === 'send') {
+    const fee = 0.001;
+    const amountNum = parseFloat(sendAmount) || 0;
     return (
       <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
-        <Header />
-        <Text style={styles.screenTitle}>{t('send.title')}</Text>
+        <StatusBar barStyle="light-content" />
+        <Header title={t('send.title')} />
+        <ScrollView contentContainerStyle={{ paddingBottom: 100 }} keyboardShouldPersistTaps="handled">
 
-        <Text style={{ color: '#888', marginBottom: 4 }}>{t('send.from')}</Text>
-        <Text style={styles.address}>{selectedAddress}</Text>
+          <Text style={styles.fieldLabel}>TO</Text>
+          <View style={styles.toRow}>
+            <TextInput
+              style={[styles.input, { flex: 1, marginBottom: 0 }]}
+              placeholder={t('send.recipient_placeholder')}
+              placeholderTextColor="#4b5563"
+              value={sendTo}
+              onChangeText={setSendTo}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <TouchableOpacity
+              style={styles.qrBtn}
+              onPress={async () => {
+                if (!sendCamPermission?.granted) {
+                  const res = await requestSendCamPermission();
+                  if (!res.granted) {
+                    Alert.alert('Camera permission needed', 'Allow camera access to scan QR codes.');
+                    return;
+                  }
+                }
+                setSendQrVisible(true);
+              }}
+            >
+              <Text style={styles.qrBtnText}>⊙</Text>
+            </TouchableOpacity>
+          </View>
 
-        <TextInput
-          style={styles.input}
-          placeholder={t('send.recipient_placeholder')}
-          placeholderTextColor="#666"
-          value={sendTo}
-          onChangeText={setSendTo}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder={t('send.amount_placeholder')}
-          placeholderTextColor="#666"
-          value={sendAmount}
-          onChangeText={setSendAmount}
-          keyboardType="decimal-pad"
-        />
+          <Text style={[styles.fieldLabel, { marginTop: 8 }]}>AMOUNT</Text>
+          <View style={styles.amountCard}>
+            <TextInput
+              style={styles.amountInput}
+              placeholder="0.00"
+              placeholderTextColor="#374151"
+              value={sendAmount}
+              onChangeText={setSendAmount}
+              keyboardType="decimal-pad"
+              textAlign="center"
+            />
+            <Text style={styles.amountCurrency}>POH</Text>
+            <Text style={styles.amountAvail}>Available: {currentBalance.toFixed(2)} POH</Text>
+          </View>
 
-        <TouchableOpacity style={styles.primaryBtn} onPress={send} disabled={loading}>
-          {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.primaryBtnText}>{t('send.now')}</Text>}
-        </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+            {[1, 5, 10].map(amt => (
+              <TouchableOpacity key={amt} style={styles.presetBtn} onPress={() => setSendAmount(String(amt))}>
+                <Text style={styles.presetText}>{amt} POH</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity style={styles.presetBtn} onPress={() => setSendAmount(String(Math.max(0, currentBalance - fee).toFixed(3)))}>
+              <Text style={styles.presetText}>MAX</Text>
+            </TouchableOpacity>
+          </View>
 
-        <Text style={{ color: '#666', fontSize: 12, textAlign: 'center', marginTop: 12 }}>
-          {t('send.note')}
-        </Text>
+          {(amountNum > 0 || sendTo.length > 0) ? (
+            <View style={styles.summaryCard}>
+              <Text style={[styles.fieldLabel, { marginBottom: 8 }]}>SUMMARY</Text>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Sending</Text>
+                <Text style={styles.summaryValue}>{amountNum.toFixed(2)} POH</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>To</Text>
+                <Text style={[styles.summaryValue, { color: '#6b7280' }]} numberOfLines={1}>
+                  {sendTo ? `${sendTo.slice(0, 10)}…${sendTo.slice(-6)}` : '—'}
+                </Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Fee</Text>
+                <Text style={[styles.summaryValue, { color: '#374151' }]}>{fee} POH</Text>
+              </View>
+            </View>
+          ) : null}
 
-        <TouchableOpacity style={styles.secondaryBtn} onPress={() => setCurrentScreen('home')}>
-          <Text>{t('send.cancel')}</Text>
-        </TouchableOpacity>
+          <TouchableOpacity style={[styles.primaryBtn, { marginTop: 16 }]} onPress={send} disabled={loading}>
+            {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.primaryBtnText}>Confirm &amp; Send</Text>}
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.secondaryBtn} onPress={() => setCurrentScreen('home')}>
+            <Text style={{ color: '#6b7280', fontFamily: 'Iceland_400Regular' }}>{t('send.cancel')}</Text>
+          </TouchableOpacity>
+        </ScrollView>
+
+        {/* QR Scanner Modal */}
+        <Modal visible={sendQrVisible} transparent={false} animationType="slide" onRequestClose={() => setSendQrVisible(false)}>
+          <View style={{ flex: 1, backgroundColor: '#000' }}>
+            <View style={styles.qrModalHeader}>
+              <Text style={styles.qrModalTitle}>Scan PoH Address</Text>
+            </View>
+            {sendCamPermission?.granted ? (
+              <CameraView
+                style={{ flex: 1 }}
+                facing="back"
+                barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                onBarcodeScanned={({ data }) => {
+                  if (data) {
+                    setSendTo(data.trim());
+                    setSendQrVisible(false);
+                  }
+                }}
+              />
+            ) : (
+              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                <Text style={{ color: '#fff', fontFamily: 'Iceland_400Regular' }}>Camera permission required</Text>
+              </View>
+            )}
+            {/* Aim guide overlay */}
+            <View style={styles.qrAimOverlay} pointerEvents="none">
+              <View style={styles.qrAimBox} />
+            </View>
+            <TouchableOpacity style={styles.qrModalClose} onPress={() => setSendQrVisible(false)}>
+              <Text style={styles.qrModalCloseText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Modal>
+
         <TabBar />
       </SafeAreaView>
     );
@@ -953,40 +1071,30 @@ export default function PoHMinerWallet() {
   if (currentScreen === 'receive') {
     return (
       <SafeAreaView style={styles.container}>
-        <Header />
-        <Text style={styles.screenTitle}>{t('receive.title')}</Text>
+        <StatusBar barStyle="light-content" />
+        <Header title={t('receive.title')} />
 
-        <View style={[styles.card, { alignItems: 'center', paddingVertical: 24 }]}>
-          <Text style={{ color: '#888', marginBottom: 16, fontSize: 14 }}>{t('receive.scan_qr')}</Text>
-
+        <View style={[styles.card, { alignItems: 'center', paddingVertical: 32 }]}>
+          <Text style={styles.sectionTitle}>RECEIVE POH</Text>
           {selectedAddress ? (
-            <View style={{ backgroundColor: '#fff', padding: 12, borderRadius: 4 }}>
-              <QRCode
-                value={selectedAddress}
-                size={220}
-                color="#000"
-                backgroundColor="#fff"
-              />
+            <View style={{ backgroundColor: '#fff', padding: 14, borderRadius: 4, marginTop: 16 }}>
+              <QRCode value={selectedAddress} size={200} color="#000" backgroundColor="#fff" />
             </View>
           ) : (
-            <Text style={{ color: '#888' }}>{t('receive.no_wallet')}</Text>
+            <Text style={{ color: '#4b5563', marginTop: 16, fontFamily: 'Iceland_400Regular' }}>{t('receive.no_wallet')}</Text>
           )}
-
-          <TouchableOpacity 
-            onPress={copyAddress} 
-            style={{ marginTop: 20, paddingHorizontal: 16, paddingVertical: 8 }}
-          >
-            <Text style={[styles.address, { fontSize: 13, textAlign: 'center' }]} numberOfLines={1}>
+          <TouchableOpacity onPress={copyAddress} style={{ marginTop: 20, alignItems: 'center' }}>
+            <Text style={{ color: '#374151', fontSize: 11, fontFamily: 'Iceland_400Regular', textAlign: 'center' }} numberOfLines={1}>
               {selectedAddress || t('receive.no_address')}
             </Text>
-            <Text style={{ color: '#22c55e', fontSize: 12, marginTop: 6, textAlign: 'center' }}>
+            <Text style={{ color: '#22c55e', fontSize: 12, marginTop: 8, fontFamily: 'Iceland_400Regular' }}>
               {t('receive.tap_to_copy')}
             </Text>
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity style={styles.secondaryBtn} onPress={() => setCurrentScreen('home')}>
-          <Text>{t('receive.back')}</Text>
+          <Text style={{ color: '#6b7280', fontFamily: 'Iceland_400Regular' }}>{t('receive.back')}</Text>
         </TouchableOpacity>
         <TabBar />
       </SafeAreaView>
@@ -996,35 +1104,56 @@ export default function PoHMinerWallet() {
   if (currentScreen === 'history') {
     return (
       <SafeAreaView style={styles.container}>
-        <Header />
-        <Text style={styles.screenTitle}>{t('history.title')}</Text>
-
+        <StatusBar barStyle="light-content" />
+        <Header title={t('history.title')} />
         <FlatList
           data={txs}
           keyExtractor={(item, i) => item.id || String(i)}
-          contentContainerStyle={{ paddingBottom: 30 }}
+          contentContainerStyle={{ paddingBottom: 100 }}
+          ListHeaderComponent={
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <Text style={styles.sectionTitle}>ALL TRANSACTIONS</Text>
+              <TouchableOpacity onPress={() => refreshAll(false)}>
+                <Text style={{ color: '#22c55e', fontSize: 11, fontFamily: 'Iceland_400Regular' }}>{t('history.refresh')}</Text>
+              </TouchableOpacity>
+            </View>
+          }
           renderItem={({ item }) => {
             const isOut = item.from === selectedAddress;
+            const isMining = item.type === 'mining' || item.type === 'reward';
             return (
               <View style={styles.txRow}>
-                <View>
-                  <Text style={styles.txType}>{(isOut ? t('history.sent') : t('history.received'))} • {item.type || t('history.tx')}</Text>
-                  <Text style={styles.txAddr} numberOfLines={1}>{isOut ? item.to : item.from}</Text>
+                <View style={[styles.txCircle, isOut && { backgroundColor: '#160a0a' }]}>
+                  <Text style={{ fontSize: 13, color: isMining ? '#22c55e' : isOut ? '#ef4444' : '#22c55e' }}>
+                    {isMining ? '⛏' : isOut ? '↑' : '↓'}
+                  </Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.txType}>{(isOut ? t('history.sent') : t('history.received'))} · {item.type || t('history.tx')}</Text>
+                  <Text style={styles.txAddr} numberOfLines={1}>
+                    {isOut
+                      ? (item.to ? `${item.to.slice(0, 10)}…${item.to.slice(-4)}` : '')
+                      : (item.from ? `${item.from.slice(0, 10)}…${item.from.slice(-4)}` : '')}
+                  </Text>
+                  <Text style={{ color: '#374151', fontSize: 10, fontFamily: 'Iceland_400Regular' }}>
+                    {new Date(item.timestamp || Date.now()).toLocaleString()}
+                  </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.txAmount}>{isOut ? '-' : '+'}{Number(item.amount || 0).toFixed(2)} POH</Text>
+                  <Text style={[styles.txAmount, isOut && { color: '#ef4444' }]}>
+                    {isOut ? '-' : '+'}{Number(item.amount || 0).toFixed(2)}
+                  </Text>
                   <Text style={styles.txStatus}>{item.status || t('status.confirmed')}</Text>
-                  <Text style={{ color: '#444', fontSize: 10 }}>{new Date(item.timestamp || Date.now()).toLocaleString()}</Text>
                 </View>
               </View>
             );
           }}
-          ListEmptyComponent={<Text style={{ color: '#555', marginTop: 30, textAlign: 'center' }}>{t('history.no_history')}</Text>}
+          ListEmptyComponent={
+            <Text style={{ color: '#374151', marginTop: 30, textAlign: 'center', fontFamily: 'Iceland_400Regular' }}>
+              {t('history.no_history')}
+            </Text>
+          }
         />
-
-        <TouchableOpacity style={styles.secondaryBtn} onPress={() => refreshAll(false)}>
-          <Text>{t('history.refresh')}</Text>
-        </TouchableOpacity>
         <TabBar />
       </SafeAreaView>
     );
@@ -1033,70 +1162,53 @@ export default function PoHMinerWallet() {
   if (currentScreen === 'wallets') {
     return (
       <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
-        <Header />
-        <Text style={styles.screenTitle}>{t('wallets.title')}</Text>
-
-        {wallets.length === 0 && (
-          <Text style={{ color: '#888', marginBottom: 20 }}>{t('wallets.none')}</Text>
-        )}
-
-        {wallets.map((w, i) => {
-          const bal = balances[w.address] || 0;
-          const isSel = w.address === selectedAddress;
-          return (
-            <View
-              key={i}
-              style={[styles.walletRow, isSel && styles.selectedWallet]}
-            >
-              <TouchableOpacity
-                style={{ flex: 1 }}
-                onPress={async () => {
+        <StatusBar barStyle="light-content" />
+        <Header title={t('wallets.title')} />
+        <ScrollView contentContainerStyle={{ paddingBottom: 100 }} keyboardShouldPersistTaps="handled">
+          {wallets.length === 0 && (
+            <Text style={{ color: '#4b5563', marginBottom: 20, fontFamily: 'Iceland_400Regular' }}>{t('wallets.none')}</Text>
+          )}
+          {wallets.map((w, i) => {
+            const bal = balances[w.address] || 0;
+            const isSel = w.address === selectedAddress;
+            return (
+              <View key={i} style={[styles.walletRow, isSel && styles.selectedWallet]}>
+                <TouchableOpacity style={{ flex: 1 }} onPress={async () => {
                   setSelectedAddress(w.address);
                   await Storage.saveSelectedAddress(w.address);
                   setCurrentScreen('home');
-                }}
-              >
-                <Text style={styles.walletAddr}>{w.address}</Text>
-                <Text style={styles.walletBal}>{bal.toFixed(2)} POH</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => {
-                  try {
-                    revealPrivateKey(w.address);
-                  } catch (e) {
-                    console.warn('Show Key error:', e);
-                    Alert.alert(t('error'), 'Failed to show private key');
-                  }
-                }}
-                style={{ paddingHorizontal: 12, paddingVertical: 6 }}
-              >
-                <Text style={{ color: '#ef4444', fontSize: 13, fontWeight: '600' }}>{t('wallets.show_key')}</Text>
-              </TouchableOpacity>
-            </View>
-          );
-        })}
-
-        <TouchableOpacity style={styles.primaryBtn} onPress={createNewWallet} disabled={loading}>
-          {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.primaryBtnText}>{t('wallets.create')}</Text>}
-        </TouchableOpacity>
-
-        <TextInput
-          style={styles.input}
-          placeholder={t('wallets.import_placeholder')}
-          placeholderTextColor="#666"
-          value={importKey}
-          onChangeText={setImportKey}
-          autoCapitalize="none"
-          secureTextEntry
-        />
-        <TouchableOpacity style={styles.secondaryBtn} onPress={importWallet} disabled={loading}>
-          <Text>{t('wallets.import_btn')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.secondaryBtn} onPress={() => setCurrentScreen('home')}>
-          <Text>{t('wallets.done')}</Text>
-        </TouchableOpacity>
+                }}>
+                  <Text style={styles.walletAddr} numberOfLines={1}>{w.address}</Text>
+                  <Text style={styles.walletBal}>{bal.toFixed(2)} POH</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => {
+                  try { revealPrivateKey(w.address); }
+                  catch (e) { Alert.alert(t('error'), 'Failed to show private key'); }
+                }} style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
+                  <Text style={{ color: '#ef4444', fontSize: 12, fontFamily: 'Iceland_400Regular' }}>{t('wallets.show_key')}</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+          <TouchableOpacity style={styles.primaryBtn} onPress={createNewWallet} disabled={loading}>
+            {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.primaryBtnText}>{t('wallets.create')}</Text>}
+          </TouchableOpacity>
+          <TextInput
+            style={styles.input}
+            placeholder={t('wallets.import_placeholder')}
+            placeholderTextColor="#4b5563"
+            value={importKey}
+            onChangeText={setImportKey}
+            autoCapitalize="none"
+            secureTextEntry
+          />
+          <TouchableOpacity style={styles.secondaryBtn} onPress={importWallet} disabled={loading}>
+            <Text style={{ color: '#22c55e', fontFamily: 'Iceland_400Regular' }}>{t('wallets.import_btn')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.secondaryBtn} onPress={() => setCurrentScreen('home')}>
+            <Text style={{ color: '#6b7280', fontFamily: 'Iceland_400Regular' }}>{t('wallets.done')}</Text>
+          </TouchableOpacity>
+        </ScrollView>
         <TabBar />
       </SafeAreaView>
     );
@@ -1106,7 +1218,7 @@ export default function PoHMinerWallet() {
     return (
       <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
         <StatusBar barStyle="light-content" />
-        <Header title="AI" />
+        <Header title="Identity Scanner" />
         <View style={{ flex: 1 }}>
           <AIScreen t={t} wallets={wallets} selectedAddress={selectedAddress} balances={balances} setSelectedAddress={setSelectedAddress} saveSelectedAddress={saveSelected} />
         </View>
@@ -1115,257 +1227,207 @@ export default function PoHMinerWallet() {
     );
   }
 
-  // Settings
   if (currentScreen === 'settings') {
     return (
       <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
-        <Header />
+        <StatusBar barStyle="light-content" />
+        <Header title="Settings" />
 
-        {/* Segmented tabs for Nodes / Language / Danger Zone */}
-        <View style={{ flexDirection: 'row', marginBottom: 12, backgroundColor: '#111', borderRadius: 8, padding: 4 }}>
-          <TouchableOpacity
-            style={{
-              flex: 1,
-              paddingVertical: 10,
-              borderRadius: 6,
-              alignItems: 'center',
-              backgroundColor: settingsTab === 'nodes' ? '#22c55e' : 'transparent',
-            }}
-            onPress={() => setSettingsTab('nodes')}
-          >
-            <Text style={{
-              color: settingsTab === 'nodes' ? '#000' : '#fff',
-              fontWeight: '700',
-              fontFamily: 'Iceland_400Regular',
-              fontSize: 15
-            }}>
-              {t('settings.nodes_tab')}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={{
-              flex: 1,
-              paddingVertical: 10,
-              borderRadius: 6,
-              alignItems: 'center',
-              backgroundColor: settingsTab === 'language' ? '#22c55e' : 'transparent',
-            }}
-            onPress={() => setSettingsTab('language')}
-          >
-            <Text style={{
-              color: settingsTab === 'language' ? '#000' : '#fff',
-              fontWeight: '700',
-              fontFamily: 'Iceland_400Regular',
-              fontSize: 15
-            }}>
-              {t('settings.language_tab')}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={{
-              flex: 1,
-              paddingVertical: 10,
-              borderRadius: 6,
-              alignItems: 'center',
-              backgroundColor: settingsTab === 'danger' ? '#ef4444' : 'transparent',
-            }}
-            onPress={() => setSettingsTab('danger')}
-          >
-            <Text style={{
-              color: settingsTab === 'danger' ? '#fff' : '#ef4444',
-              fontWeight: '700',
-              fontFamily: 'Iceland_400Regular',
-              fontSize: 15
-            }}>
-              {t('settings.danger_tab')}
-            </Text>
-          </TouchableOpacity>
+        {/* Segmented tabs */}
+        <View style={{ flexDirection: 'row', marginBottom: 16, backgroundColor: '#111', borderRadius: 4, padding: 3 }}>
+          {[
+            { key: 'nodes',    label: t('settings.nodes_tab') },
+            { key: 'language', label: t('settings.language_tab') },
+            { key: 'wallets',  label: 'Wallets' },
+            { key: 'danger',   label: t('settings.danger_tab') },
+          ].map(tab => (
+            <TouchableOpacity
+              key={tab.key}
+              style={{
+                flex: 1, paddingVertical: 9, borderRadius: 3, alignItems: 'center',
+                backgroundColor: settingsTab === tab.key
+                  ? (tab.key === 'danger' ? '#ef4444' : '#22c55e')
+                  : 'transparent',
+              }}
+              onPress={() => setSettingsTab(tab.key)}
+            >
+              <Text style={{
+                color: settingsTab === tab.key
+                  ? (tab.key === 'danger' ? '#fff' : '#000')
+                  : (tab.key === 'danger' ? '#ef4444' : '#9ca3af'),
+                fontWeight: '700', fontFamily: 'Iceland_400Regular', fontSize: 13,
+              }}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
 
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: 140 }}
-          keyboardShouldPersistTaps="handled"
-        >
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 140 }} keyboardShouldPersistTaps="handled">
           {settingsTab === 'nodes' ? (
-            /* ========== NODES TAB ========== */
             <>
-              <Text style={{ color: '#888', marginBottom: 12, fontSize: 14 }}>
+              <Text style={{ color: '#4b5563', marginBottom: 12, fontSize: 13, fontFamily: 'Iceland_400Regular' }}>
                 {t('settings.nodes_desc')}
               </Text>
-
               {nodes.length === 0 && (
-                <Text style={{ color: '#888', marginBottom: 16 }}>{t('settings.no_nodes')}</Text>
+                <Text style={{ color: '#4b5563', marginBottom: 16, fontFamily: 'Iceland_400Regular' }}>{t('settings.no_nodes')}</Text>
               )}
-
-              {nodes.length > 0 && (
-                <Text style={{ color: '#666', fontSize: 12, marginBottom: 8 }}>
-                  Default nodes are pre-configured. Add more trusted nodes for better resilience.
-                </Text>
-              )}
-
               {nodes.map((node, index) => {
                 const isActive = node.url === activeNodeUrl;
                 return (
-                  <View
-                    key={index}
-                    style={[
-                      styles.walletRow,
-                      isActive && { borderColor: '#22c55e', borderWidth: 2 }
-                    ]}
-                  >
+                  <View key={index} style={[styles.walletRow, isActive && { borderColor: '#22c55e', borderWidth: 1 }]}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.walletAddr}>{node.url}</Text>
-                      {node.name && <Text style={{ color: '#888', fontSize: 12 }}>{node.name}</Text>}
-                      {node.lastLatency && (
-                        <Text style={{ color: '#22c55e', fontSize: 12 }}>
-                          {node.lastLatency} ms
-                        </Text>
-                      )}
+                      <Text style={styles.walletAddr} numberOfLines={1}>{node.url}</Text>
+                      {node.name && <Text style={{ color: '#4b5563', fontSize: 11, fontFamily: 'Iceland_400Regular' }}>{node.name}</Text>}
+                      {node.lastLatency && <Text style={{ color: '#22c55e', fontSize: 11, fontFamily: 'Iceland_400Regular' }}>{node.lastLatency} ms</Text>}
                     </View>
-
                     {!isActive && (
-                      <TouchableOpacity
-                        onPress={async () => {
-                          setActiveNodeUrl(node.url);
-                          await Storage.saveActiveNodeUrl(node.url);
-                          await refreshAll(false);
-                        }}
-                      >
-                        <Text style={{ color: '#22c55e' }}>{t('settings.use')}</Text>
+                      <TouchableOpacity onPress={async () => {
+                        setActiveNodeUrl(node.url);
+                        await Storage.saveActiveNodeUrl(node.url);
+                        await refreshAll(false);
+                      }}>
+                        <Text style={{ color: '#22c55e', fontFamily: 'Iceland_400Regular', fontSize: 13 }}>{t('settings.use')}</Text>
                       </TouchableOpacity>
                     )}
-
-                    <TouchableOpacity
-                      onPress={async () => {
-                        const newNodes = nodes.filter((_, i) => i !== index);
-                        setNodes(newNodes);
-                        await Storage.saveNodes(newNodes);
-
-                        if (isActive && newNodes.length > 0) {
-                          setActiveNodeUrl(newNodes[0].url);
-                          await Storage.saveActiveNodeUrl(newNodes[0].url);
-                        }
-                      }}
-                      style={{ marginLeft: 12 }}
-                    >
-                      <Text style={{ color: '#ef4444' }}>{t('settings.remove')}</Text>
+                    <TouchableOpacity onPress={async () => {
+                      const newNodes = nodes.filter((_, i) => i !== index);
+                      setNodes(newNodes);
+                      await Storage.saveNodes(newNodes);
+                      if (isActive && newNodes.length > 0) {
+                        setActiveNodeUrl(newNodes[0].url);
+                        await Storage.saveActiveNodeUrl(newNodes[0].url);
+                      }
+                    }} style={{ marginLeft: 12 }}>
+                      <Text style={{ color: '#ef4444', fontFamily: 'Iceland_400Regular', fontSize: 13 }}>{t('settings.remove')}</Text>
                     </TouchableOpacity>
                   </View>
                 );
               })}
-
               <TextInput
                 style={styles.input}
                 placeholder={t('settings.node_placeholder')}
-                placeholderTextColor="#666"
+                placeholderTextColor="#4b5563"
                 value={importKey}
                 onChangeText={setImportKey}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
-
-              <TouchableOpacity
-                style={styles.primaryBtn}
-                onPress={async () => {
-                  if (!importKey.trim()) return;
-
-                  const newNode = { url: importKey.trim() };
-                  const newNodes = [...nodes, newNode];
-                  setNodes(newNodes);
-                  await Storage.saveNodes(newNodes);
-                  setImportKey('');
-
-                  if (!activeNodeUrl) {
-                    setActiveNodeUrl(newNode.url);
-                    await Storage.saveActiveNodeUrl(newNode.url);
-                  }
-
-                  const best = await selectBestNode(newNodes);
-                  if (best) {
-                    setActiveNodeUrl(best.url);
-                    await Storage.saveActiveNodeUrl(best.url);
-                  }
-                }}
-              >
+              <TouchableOpacity style={styles.primaryBtn} onPress={async () => {
+                if (!importKey.trim()) return;
+                const newNode = { url: importKey.trim() };
+                const newNodes = [...nodes, newNode];
+                setNodes(newNodes);
+                await Storage.saveNodes(newNodes);
+                setImportKey('');
+                if (!activeNodeUrl) {
+                  setActiveNodeUrl(newNode.url);
+                  await Storage.saveActiveNodeUrl(newNode.url);
+                }
+                const best = await selectBestNode(newNodes);
+                if (best) {
+                  setActiveNodeUrl(best.url);
+                  await Storage.saveActiveNodeUrl(best.url);
+                }
+              }}>
                 <Text style={styles.primaryBtnText}>{t('settings.add_node')}</Text>
               </TouchableOpacity>
             </>
           ) : settingsTab === 'language' ? (
-            /* ========== LANGUAGE TAB (scrollable) ========== */
             <>
-              <Text style={{ color: '#888', marginBottom: 12, fontSize: 14 }}>
+              <Text style={{ color: '#4b5563', marginBottom: 12, fontSize: 13, fontFamily: 'Iceland_400Regular' }}>
                 {t('settings.lang_desc')}
               </Text>
-
               {SUPPORTED_LANGUAGES.map((lang) => {
                 const isActiveLang = lang.code === language;
                 return (
                   <TouchableOpacity
                     key={lang.code}
-                    style={[
-                      styles.walletRow,
-                      isActiveLang && { borderColor: '#22c55e', borderWidth: 2 },
-                      { paddingVertical: 10 }
-                    ]}
+                    style={[styles.walletRow, isActiveLang && { borderColor: '#22c55e', borderWidth: 1 }, { paddingVertical: 10 }]}
                     onPress={() => changeLanguage(lang.code)}
                   >
                     <View style={{ flex: 1 }}>
                       <Text style={styles.walletAddr}>{lang.nativeName}</Text>
-                      <Text style={{ color: '#888', fontSize: 12 }}>{lang.name}</Text>
+                      <Text style={{ color: '#4b5563', fontSize: 11, fontFamily: 'Iceland_400Regular' }}>{lang.name}</Text>
                     </View>
                     {isActiveLang && (
-                      <Text style={{ color: '#22c55e', fontWeight: '600' }}>{t('lang.current')}</Text>
+                      <Text style={{ color: '#22c55e', fontFamily: 'Iceland_400Regular', fontSize: 12 }}>{t('lang.current')}</Text>
                     )}
                   </TouchableOpacity>
                 );
               })}
             </>
+          ) : settingsTab === 'wallets' ? (
+            <>
+              {wallets.length === 0 && (
+                <Text style={{ color: '#4b5563', marginBottom: 20, fontFamily: 'Iceland_400Regular' }}>{t('wallets.none')}</Text>
+              )}
+              {wallets.map((w, i) => {
+                const bal = balances[w.address] || 0;
+                const isSel = w.address === selectedAddress;
+                return (
+                  <View key={i} style={[styles.walletRow, isSel && styles.selectedWallet]}>
+                    <TouchableOpacity style={{ flex: 1 }} onPress={async () => {
+                      setSelectedAddress(w.address);
+                      await Storage.saveSelectedAddress(w.address);
+                      setCurrentScreen('home');
+                    }}>
+                      <Text style={styles.walletAddr} numberOfLines={1}>{w.address}</Text>
+                      <Text style={styles.walletBal}>{bal.toFixed(2)} POH</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => {
+                      try { revealPrivateKey(w.address); }
+                      catch (e) { Alert.alert(t('error'), 'Failed to show private key'); }
+                    }} style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
+                      <Text style={{ color: '#ef4444', fontSize: 12, fontFamily: 'Iceland_400Regular' }}>{t('wallets.show_key')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+              <TouchableOpacity style={styles.primaryBtn} onPress={createNewWallet} disabled={loading}>
+                {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.primaryBtnText}>{t('wallets.create')}</Text>}
+              </TouchableOpacity>
+              <TextInput
+                style={styles.input}
+                placeholder={t('wallets.import_placeholder')}
+                placeholderTextColor="#4b5563"
+                value={importKey}
+                onChangeText={setImportKey}
+                autoCapitalize="none"
+                secureTextEntry
+              />
+              <TouchableOpacity style={styles.secondaryBtn} onPress={importWallet} disabled={loading}>
+                <Text style={{ color: '#22c55e', fontFamily: 'Iceland_400Regular' }}>{t('wallets.import_btn')}</Text>
+              </TouchableOpacity>
+            </>
           ) : settingsTab === 'danger' ? (
-            /* ========== DANGER ZONE TAB ========== */
             <View style={{ padding: 8 }}>
-              <Text style={{ color: '#ef4444', fontSize: 16, fontWeight: '700', marginBottom: 12 }}>
+              <Text style={{ color: '#ef4444', fontSize: 15, fontFamily: 'Iceland_400Regular', marginBottom: 12 }}>
                 Danger Zone
               </Text>
-              <Text style={{ color: '#888', marginBottom: 16 }}>
+              <Text style={{ color: '#4b5563', marginBottom: 16, fontFamily: 'Iceland_400Regular', fontSize: 13 }}>
                 These actions are irreversible.
               </Text>
-
               <TouchableOpacity
-                style={[styles.secondaryBtn, { borderColor: '#ef4444', borderWidth: 1, borderRadius: 8 }]}
+                style={[styles.secondaryBtn, { borderColor: '#ef4444', borderWidth: 1, borderRadius: 4 }]}
                 onPress={() => {
                   const message = 'This will permanently delete all wallets, private keys, nodes, and transaction history from this device.';
-
                   const doClear = () => {
-                    // Visual feedback while clearing
                     setLoading(true);
                     clearAllLocalData().finally(() => setLoading(false));
                   };
-
                   if (Platform.OS === 'web') {
-                    if (window.confirm('Clear All Local Data?\n\n' + message)) {
-                      doClear();
-                    }
+                    if (window.confirm('Clear All Local Data?\n\n' + message)) { doClear(); }
                   } else {
-                    Alert.alert(
-                      'Clear All Local Data?',
-                      message,
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                          text: 'Delete Everything',
-                          style: 'destructive',
-                          onPress: doClear,
-                        },
-                      ]
-                    );
+                    Alert.alert('Clear All Local Data?', message, [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: 'Delete Everything', style: 'destructive', onPress: doClear },
+                    ]);
                   }
                 }}
               >
-                <Text style={{ color: '#ef4444', fontWeight: '600' }}>
-                  Clear All Local Wallets & Data
+                <Text style={{ color: '#ef4444', fontFamily: 'Iceland_400Regular' }}>
+                  Clear All Local Wallets &amp; Data
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1373,7 +1435,7 @@ export default function PoHMinerWallet() {
         </ScrollView>
 
         <TouchableOpacity style={styles.secondaryBtn} onPress={() => setCurrentScreen('home')}>
-          <Text>{t('wallets.done')}</Text>
+          <Text style={{ color: '#6b7280', fontFamily: 'Iceland_400Regular' }}>{t('wallets.done')}</Text>
         </TouchableOpacity>
 
         <TabBar />
@@ -1385,59 +1447,151 @@ export default function PoHMinerWallet() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000', paddingTop: 50, paddingBottom: 95, paddingRight: 20, paddingLeft: 20 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  title: { fontSize: 26, color: '#22c55e', fontWeight: '700', fontFamily: 'Iceland_400Regular' },
-  screenTitle: { fontSize: 22, color: '#fff', marginBottom: 16, fontWeight: '600', fontFamily: 'Iceland_400Regular' },
-  card: { backgroundColor: '#111', padding: 20, borderRadius: 4, marginBottom: 16 },
-  balance: { fontSize: 38, color: '#fff', fontWeight: '700', marginVertical: 6, fontFamily: 'Iceland_400Regular' },
-  address: { color: '#22c55e', fontSize: 13, marginTop: 4, fontFamily: 'Iceland_400Regular' },
-  sync: { color: '#444', fontSize: 11, marginTop: 6 },
-  label: { color: '#888', fontSize: 13, fontFamily: 'Iceland_400Regular' },
-  actions: { flexDirection: 'row', gap: 12, marginBottom: 16 },
-  actionBtn: { flex: 1, backgroundColor: '#22c55e', paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
-  actionText: { color: '#000', fontWeight: '700', fontSize: 16, fontFamily: 'Iceland_400Regular' },
-  section: { marginBottom: 12, flex: 1 },
-  sectionTitle: { color: '#fff', fontSize: 15, marginBottom: 8, fontWeight: '600', fontFamily: 'Iceland_400Regular' },
-  txRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#222' },
-  txType: { color: '#22c55e', fontWeight: '600', fontSize: 13 },
-  txAmount: { color: '#fff', fontWeight: '600' },
-  txStatus: { color: '#666', fontSize: 11 },
-  txAddr: { color: '#555', fontSize: 11, maxWidth: 120 },
-  input: { backgroundColor: '#111', color: '#fff', padding: 14, borderRadius: 10, marginBottom: 12, fontSize: 15, fontFamily: 'Iceland_400Regular' },
-  primaryBtn: { backgroundColor: '#22c55e', padding: 16, borderRadius: 10, alignItems: 'center', marginVertical: 8 },
+  container: { flex: 1, backgroundColor: '#000', paddingTop: 50, paddingBottom: 95, paddingHorizontal: 20 },
+
+  // Header
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  title: { fontSize: 20, color: '#fff', fontFamily: 'Iceland_400Regular' },
+  settingsIcon: { color: '#6b7280', fontSize: 18 },
+
+  // Balance card
+  card: {
+    backgroundColor: '#0f1a0f',
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.35)',
+  },
+  label: { color: '#22c55e', fontSize: 10, letterSpacing: 2, fontFamily: 'Iceland_400Regular' },
+  balance: { fontSize: 48, color: '#fff', fontWeight: '200', fontFamily: 'Iceland_400Regular' },
+  balanceCurrency: { fontSize: 18, color: '#22c55e', fontFamily: 'Iceland_400Regular', marginBottom: 10 },
+  usd: { color: '#4b5563', fontSize: 12, fontFamily: 'Iceland_400Regular', marginTop: 2 },
+  addressSmall: { color: '#374151', fontSize: 11, fontFamily: 'Iceland_400Regular' },
+  sync: { color: '#374151', fontSize: 10, fontFamily: 'Iceland_400Regular' },
+
+  // Action row
+  actions: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  actionBtn: { flex: 1, backgroundColor: '#111', paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
+  actionIcon: { color: '#fff', fontSize: 20, marginBottom: 4 },
+  actionText: { color: '#9ca3af', fontSize: 11, fontFamily: 'Iceland_400Regular' },
+
+  // Section
+  section: { flex: 1, marginBottom: 12 },
+  sectionTitle: { color: '#4b5563', fontSize: 10, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular' },
+
+  // Tx rows
+  txRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0d0d0d',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 6,
+  },
+  txCircle: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: '#0f1a0f',
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: 10,
+  },
+  txType: { color: '#fff', fontSize: 12, fontFamily: 'Iceland_400Regular' },
+  txAddr: { color: '#4b5563', fontSize: 10, fontFamily: 'Iceland_400Regular', marginTop: 2 },
+  txAmount: { color: '#22c55e', fontSize: 13, fontFamily: 'Iceland_400Regular', fontWeight: '600' },
+  txStatus: { color: '#4b5563', fontSize: 10, fontFamily: 'Iceland_400Regular', marginTop: 2 },
+
+  // Inputs
+  fieldLabel: { color: '#4b5563', fontSize: 10, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular', marginBottom: 6 },
+  input: {
+    backgroundColor: '#111', color: '#fff', padding: 14,
+    borderRadius: 10, marginBottom: 12, fontSize: 13,
+    fontFamily: 'Iceland_400Regular', borderWidth: 1, borderColor: '#1f1f1f',
+  },
+
+  // Send amount card
+  amountCard: {
+    backgroundColor: '#0f1a0f', borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.35)',
+    borderRadius: 12, paddingVertical: 20, paddingHorizontal: 16, alignItems: 'center',
+  },
+  amountInput: {
+    color: '#fff', fontSize: 42, fontWeight: '200',
+    fontFamily: 'Iceland_400Regular', minWidth: 120, textAlign: 'center',
+  },
+  amountCurrency: { color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular', marginTop: 2 },
+  amountAvail: { color: '#374151', fontSize: 11, fontFamily: 'Iceland_400Regular', marginTop: 8 },
+
+  // Preset buttons
+  presetBtn: { flex: 1, backgroundColor: '#111', paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
+  presetText: { color: '#9ca3af', fontSize: 11, fontFamily: 'Iceland_400Regular' },
+
+  // Summary card
+  summaryCard: { backgroundColor: '#0d0d0d', borderRadius: 12, padding: 16, marginTop: 16 },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
+  summaryLabel: { color: '#9ca3af', fontSize: 12, fontFamily: 'Iceland_400Regular' },
+  summaryValue: { color: '#fff', fontSize: 12, fontFamily: 'Iceland_400Regular' },
+
+  // Buttons
+  primaryBtn: { backgroundColor: '#22c55e', padding: 16, borderRadius: 4, alignItems: 'center', marginVertical: 8 },
   primaryBtnText: { color: '#000', fontWeight: '700', fontSize: 16, fontFamily: 'Iceland_400Regular' },
   secondaryBtn: { padding: 14, alignItems: 'center', marginTop: 4 },
+
+  // Screen title (kept for compat)
+  screenTitle: { fontSize: 20, color: '#fff', marginBottom: 16, fontFamily: 'Iceland_400Regular' },
+  address: { color: '#374151', fontSize: 11, marginTop: 4, fontFamily: 'Iceland_400Regular' },
+
+  // Wallet rows
   walletRow: { backgroundColor: '#111', padding: 14, borderRadius: 10, marginBottom: 8, flexDirection: 'row', alignItems: 'center' },
-  selectedWallet: { borderColor: '#22c55e', borderWidth: 2 },
-  walletAddr: { color: '#fff', fontSize: 13, fontFamily: 'Iceland_400Regular' },
-  walletBal: { color: '#22c55e', fontSize: 13, marginTop: 3, fontFamily: 'Iceland_400Regular' },
+  selectedWallet: { borderColor: '#22c55e', borderWidth: 1 },
+  walletAddr: { color: '#fff', fontSize: 12, fontFamily: 'Iceland_400Regular' },
+  walletBal: { color: '#22c55e', fontSize: 12, marginTop: 3, fontFamily: 'Iceland_400Regular' },
+
+  // Tab bar
   tabBar: {
     flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: '#222',
-    backgroundColor: '#000',
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingTop: 8,
-    paddingBottom: 20, // safe area for home indicator / gesture bar
+    borderTopWidth: 1, borderTopColor: '#1c1c1c',
+    backgroundColor: '#0a0a0a',
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    paddingTop: 8, paddingBottom: 20,
   },
-  tab: { flex: 1, alignItems: 'center', paddingVertical: 10, paddingHorizontal: 6 },
-  centerTab: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 6,
-    borderRadius: 999,
-    backgroundColor: '#111',
-  },
-  tabActive: { borderTopWidth: 3, borderTopColor: '#22c55e' },
-  tabText: { color: '#888', fontSize: 12, fontFamily: 'Iceland_400Regular' },
-  centerTabText: { color: '#888', fontSize: 12, fontFamily: 'Iceland_400Regular', fontWeight: '600' },
-  tabTextActive: { color: '#22c55e', fontWeight: '600', fontFamily: 'Iceland_400Regular' },
+  tab: { flex: 1, alignItems: 'center', paddingVertical: 8 },
+  tabIcon: { fontSize: 16, color: '#374151' },
+  tabIconActive: { color: '#22c55e' },
+  tabText: { color: '#374151', fontSize: 9, fontFamily: 'Iceland_400Regular', marginTop: 3 },
+  tabTextActive: { color: '#22c55e' },
+
   langRow: { backgroundColor: '#111', padding: 12, borderRadius: 8, marginBottom: 6, flexDirection: 'row', alignItems: 'center' },
-  langRowActive: { borderColor: '#22c55e', borderWidth: 2 },
+  langRowActive: { borderColor: '#22c55e', borderWidth: 1 },
+
+  // Send screen — TO row with QR button
+  toRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  qrBtn: {
+    width: 46, height: 46,
+    backgroundColor: '#111', borderWidth: 1, borderColor: '#1f1f1f',
+    borderRadius: 10, alignItems: 'center', justifyContent: 'center',
+  },
+  qrBtnText: { color: '#22c55e', fontSize: 22 },
+
+  // QR scanner modal
+  qrModalHeader: {
+    paddingTop: 56, paddingBottom: 16, paddingHorizontal: 20,
+    backgroundColor: '#000',
+  },
+  qrModalTitle: { color: '#fff', fontSize: 18, fontFamily: 'Iceland_400Regular' },
+  qrAimOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center', justifyContent: 'center',
+    pointerEvents: 'none',
+  },
+  qrAimBox: {
+    width: 220, height: 220,
+    borderWidth: 2, borderColor: '#22c55e', borderRadius: 12,
+    backgroundColor: 'transparent',
+  },
+  qrModalClose: {
+    position: 'absolute', bottom: 40, alignSelf: 'center',
+    paddingVertical: 12, paddingHorizontal: 36,
+    backgroundColor: '#111', borderRadius: 10, borderWidth: 1, borderColor: '#2a2a2a',
+  },
+  qrModalCloseText: { color: '#9ca3af', fontSize: 15, fontFamily: 'Iceland_400Regular' },
 });

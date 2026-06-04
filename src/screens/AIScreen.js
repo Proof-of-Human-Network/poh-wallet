@@ -28,6 +28,7 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
   const [ukResult, setUkResult] = useState(null);
   const [scanProfile, setScanProfile] = useState(null);
   const [scanProfileLoading, setScanProfileLoading] = useState(false);
+  const [vibeData, setVibeData] = useState(null);
 
   // Evidence accordions (like original)
   const [showEvidencePass, setShowEvidencePass] = useState(true);
@@ -149,6 +150,7 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
         const b = await r.json();
         if (b && b.status === 'done') {
           setBrainVerdict(b);
+          if (b.vibeData) setVibeData({ ...b.vibeData, farcasterData: b.farcasterData || null, paragraphData: b.paragraphData || null });
           setBrainPolling(false);
           clearInterval(iv);
           // load profile now that verdict is ready
@@ -182,6 +184,7 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
     setEuResult(null);
     setUkResult(null);
     setScanProfile(null);
+    setVibeData(null);
     // if we had resolve picker, use first or cleared
     let inputToUse = scanInput.trim();
     if (resolveResults.length > 0) {
@@ -678,6 +681,41 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
             </View>
           )}
 
+          {/* Social Vibe */}
+          {vibeData && brainVerdict && (
+            <View style={styles.vibeCard}>
+              <View style={styles.vibeHeader}>
+                <Text style={styles.vibeLabel}>SOCIAL VIBE</Text>
+                {vibeData.sources?.map(s => (
+                  <Text key={s} style={styles.vibeSourcePill}>{s}</Text>
+                ))}
+              </View>
+              {!!vibeData.vibe && <Text style={styles.vibeText}>{vibeData.vibe}</Text>}
+              {vibeData.topics?.length > 0 && (
+                <View style={styles.vibeTopics}>
+                  {vibeData.topics.map(t => <Text key={t} style={styles.vibeTopic}>{t}</Text>)}
+                </View>
+              )}
+              {vibeData.humanSignals?.length > 0 && vibeData.humanSignals.map((s, i) => (
+                <Text key={i} style={styles.vibeSignal}>· {s}</Text>
+              ))}
+              {vibeData.farcasterData?.casts?.slice(0, 3).map((c, i) => (
+                <View key={i} style={styles.vibeCast}>
+                  <Text style={styles.vibeCastText} numberOfLines={2}>{c.text}</Text>
+                  {(c.likes > 0 || c.replies > 0) && (
+                    <Text style={styles.vibeCastMeta}>{c.likes ? `♥${c.likes}` : ''}{c.replies ? ` ·${c.replies}r` : ''}</Text>
+                  )}
+                </View>
+              ))}
+              {vibeData.paragraphData?.posts?.slice(0, 3).map((p, i) => (
+                <Text key={i} style={styles.vibeArticle}>
+                  <Text style={styles.vibeArticleTitle}>{p.title}</Text>
+                  {p.subtitle ? <Text style={styles.vibeArticleSub}> — {p.subtitle}</Text> : null}
+                </Text>
+              ))}
+            </View>
+          )}
+
           {/* FULL PROFILE attached to AI verdict, like frontend WalletProfile with avatar, badges, identity, graph etc. */}
           {(scanProfileLoading || scanProfile) && brainVerdict && (
             <View style={styles.profileCardWrap}>
@@ -847,6 +885,22 @@ const styles = StyleSheet.create({
   brainText: { color: '#aaa', marginTop: 6 },
   brainReason: { color: '#ddd', marginTop: 8, fontSize: 14 },
   brainConf: { color: '#888', marginTop: 6, fontSize: 12 },
+
+  // Vibe card
+  vibeCard: { backgroundColor: '#050d05', borderWidth: 1, borderColor: 'rgba(34,197,94,0.2)', borderRadius: 12, padding: 14, marginTop: 10 },
+  vibeHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' },
+  vibeLabel: { fontFamily: 'Iceland_400Regular', fontSize: 9, letterSpacing: 1.5, color: '#22c55e' },
+  vibeSourcePill: { fontFamily: 'Iceland_400Regular', fontSize: 9, color: '#374151', backgroundColor: '#111', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  vibeText: { fontFamily: 'Iceland_400Regular', fontSize: 13, color: '#9ca3af', lineHeight: 20, marginBottom: 10 },
+  vibeTopics: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+  vibeTopic: { fontFamily: 'Iceland_400Regular', fontSize: 10, color: '#22c55e', backgroundColor: 'rgba(34,197,94,0.08)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.2)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
+  vibeSignal: { fontFamily: 'Iceland_400Regular', fontSize: 11, color: '#4b5563', lineHeight: 18 },
+  vibeCast: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: '#0a0a0a' },
+  vibeCastText: { flex: 1, fontFamily: 'Iceland_400Regular', fontSize: 11, color: '#6b7280', lineHeight: 15 },
+  vibeCastMeta: { fontFamily: 'Iceland_400Regular', fontSize: 9, color: '#374151', marginLeft: 8 },
+  vibeArticle: { paddingVertical: 3 },
+  vibeArticleTitle: { fontFamily: 'Iceland_400Regular', fontSize: 11, color: '#9ca3af' },
+  vibeArticleSub: { fontFamily: 'Iceland_400Regular', fontSize: 10, color: '#4b5563' },
   badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, fontSize: 11, fontWeight: '700' },
   badgeHuman: { backgroundColor: '#052e16', color: '#22c55e' },
   badgeUncertain: { backgroundColor: '#422006', color: '#eab308' },
