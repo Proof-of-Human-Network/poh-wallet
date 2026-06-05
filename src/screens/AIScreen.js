@@ -528,6 +528,68 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
             </View>
           </View>
         )}
+
+        {/* Social Characteristic — Farcaster + Paragraph */}
+        {vibeData && (
+          <View style={styles.charSection}>
+            <Text style={styles.sectionSubTitle}>Social Characteristic</Text>
+
+            {!!vibeData.vibe && <Text style={styles.charText}>{vibeData.vibe}</Text>}
+
+            {vibeData.topics?.length > 0 && (
+              <View style={styles.charTopics}>
+                {vibeData.topics.map(t => <Text key={t} style={styles.charTopic}>{t}</Text>)}
+              </View>
+            )}
+
+            {vibeData.humanSignals?.length > 0 && (
+              <View style={{ marginBottom: 8 }}>
+                {vibeData.humanSignals.map((s, i) => (
+                  <Text key={i} style={styles.charSignal}>· {s}</Text>
+                ))}
+              </View>
+            )}
+
+            {vibeData.farcasterData && (
+              <View style={styles.charSource}>
+                <Text style={styles.charSourceLabel}>
+                  🟣 Farcaster — @{vibeData.farcasterData.username}
+                  {'  '}<Text style={styles.charFollowMeta}>{vibeData.farcasterData.followerCount?.toLocaleString()} followers</Text>
+                </Text>
+                {!!vibeData.farcasterData.bio && (
+                  <Text style={styles.charBio}>"{vibeData.farcasterData.bio}"</Text>
+                )}
+                {(vibeData.farcasterData.casts || []).slice(0, 4).map((c, i) => (
+                  <View key={i} style={styles.charCast}>
+                    <Text style={styles.charCastText} numberOfLines={2}>{c.text}</Text>
+                    {(c.likes > 0 || c.replies > 0) && (
+                      <Text style={styles.charCastMeta}>{c.likes ? `♥${c.likes}` : ''}{c.replies ? ` ·${c.replies}r` : ''}</Text>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {vibeData.paragraphData && (
+              <View style={styles.charSource}>
+                <Text style={styles.charSourceLabel}>
+                  ✍️ Paragraph — {vibeData.paragraphData.title}
+                  {'  '}<Text style={styles.charFollowMeta}>{vibeData.paragraphData.subscriberCount?.toLocaleString()} subscribers</Text>
+                </Text>
+                {!!vibeData.paragraphData.description && (
+                  <Text style={styles.charBio}>"{vibeData.paragraphData.description}"</Text>
+                )}
+                {(vibeData.paragraphData.posts || []).slice(0, 4).map((post, i) => (
+                  <Text key={i} style={styles.charArticle}>
+                    <Text style={styles.charArticleTitle}>{post.title}</Text>
+                    {post.subtitle ? <Text style={styles.charArticleSub}> — {post.subtitle}</Text> : null}
+                  </Text>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+
       </View>
     );
   }
@@ -901,6 +963,23 @@ const styles = StyleSheet.create({
   vibeArticle: { paddingVertical: 3 },
   vibeArticleTitle: { fontFamily: 'Iceland_400Regular', fontSize: 11, color: '#9ca3af' },
   vibeArticleSub: { fontFamily: 'Iceland_400Regular', fontSize: 10, color: '#4b5563' },
+
+  // Social characteristic (inside renderFullProfile)
+  charSection: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#1a1a1a' },
+  charText: { fontFamily: 'Iceland_400Regular', fontSize: 13, color: '#9ca3af', lineHeight: 20, marginBottom: 10 },
+  charTopics: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+  charTopic: { fontFamily: 'Iceland_400Regular', fontSize: 10, color: '#22c55e', backgroundColor: 'rgba(34,197,94,0.08)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.2)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
+  charSignal: { fontFamily: 'Iceland_400Regular', fontSize: 11, color: '#4b5563', lineHeight: 18 },
+  charSource: { marginTop: 10, padding: 10, backgroundColor: '#0a0a0a', borderRadius: 8, borderWidth: 1, borderColor: '#1a1a1a' },
+  charSourceLabel: { fontFamily: 'Iceland_400Regular', fontSize: 11, color: '#6b7280', fontWeight: '600', marginBottom: 5, flexDirection: 'row', alignItems: 'center' },
+  charFollowMeta: { fontFamily: 'Iceland_400Regular', fontSize: 10, color: '#374151' },
+  charBio: { fontFamily: 'Iceland_400Regular', fontSize: 11, color: '#6b7280', fontStyle: 'italic', marginBottom: 6 },
+  charCast: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#111' },
+  charCastText: { flex: 1, fontFamily: 'Iceland_400Regular', fontSize: 11, color: '#6b7280', lineHeight: 15 },
+  charCastMeta: { fontFamily: 'Iceland_400Regular', fontSize: 9, color: '#374151', marginLeft: 6 },
+  charArticle: { paddingVertical: 3 },
+  charArticleTitle: { fontFamily: 'Iceland_400Regular', fontSize: 11, color: '#9ca3af' },
+  charArticleSub: { fontFamily: 'Iceland_400Regular', fontSize: 10, color: '#4b5563' },
   badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, fontSize: 11, fontWeight: '700' },
   badgeHuman: { backgroundColor: '#052e16', color: '#22c55e' },
   badgeUncertain: { backgroundColor: '#422006', color: '#eab308' },
