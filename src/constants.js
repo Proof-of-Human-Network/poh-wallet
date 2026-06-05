@@ -11,12 +11,9 @@ export const STORAGE_KEYS = {
 
 // Default public / bootstrap wallet RPC nodes (used when the user has none configured)
 export const DEFAULT_WALLET_NODES = [
-  { url: 'https://miner.proofofhuman.ge:3456', name: 'First Node' },
-  { url: 'https://proofofhuman.ge:3456', name: 'Second Node' },
-  { url: 'https://exchange.assetux.com:3456', name: 'Third Node' },
-  // Add trusted public nodes here when the network grows
-  // Example:
-  // { url: 'https://poh-node.example.com:3456', name: 'Community Node 1' },
+  { url: 'https://bootnode.proofofhuman.ge', name: 'First Node' },
+  { url: 'https://proofofhuman.ge', name: 'Second Node' },
+  { url: 'https://poh.assetux.com', name: 'Third Node' },
 ];
 
 // Supported languages for the wallet (top 20 + additional requested languages)
