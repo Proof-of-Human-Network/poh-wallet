@@ -5,6 +5,7 @@ import { STORAGE_KEYS } from '../constants';
 /** Simple wrappers around AsyncStorage + SecureStore */
 
 export async function loadItem(key, defaultValue = null) {
+  if (typeof key !== 'string' || !key) return defaultValue;
   try {
     const raw = await AsyncStorage.getItem(key);
     return raw ? JSON.parse(raw) : defaultValue;
@@ -14,10 +15,12 @@ export async function loadItem(key, defaultValue = null) {
 }
 
 export async function saveItem(key, value) {
+  if (typeof key !== 'string' || !key) return;
   await AsyncStorage.setItem(key, JSON.stringify(value));
 }
 
 export async function loadString(key) {
+  if (typeof key !== 'string' || !key) return null;
   try {
     return await AsyncStorage.getItem(key);
   } catch {
@@ -26,9 +29,8 @@ export async function loadString(key) {
 }
 
 export async function saveString(key, value) {
-  if (value) {
-    await AsyncStorage.setItem(key, value);
-  }
+  if (typeof key !== 'string' || !key || !value) return;
+  await AsyncStorage.setItem(key, value);
 }
 
 // Private keys (sensitive)

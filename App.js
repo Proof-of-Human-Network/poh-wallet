@@ -39,6 +39,15 @@ import {
 // Keep the splash screen visible while we load fonts
 SplashScreen.preventAutoHideAsync();
 
+// Intercept AsyncStorage.getItem with undefined key to capture JS stack trace
+const _origGetItem = AsyncStorage.getItem.bind(AsyncStorage);
+AsyncStorage.getItem = (key, ...rest) => {
+  if (typeof key !== 'string') {
+    console.error('[AsyncStorage] getItem called with non-string key:', key, '\n', new Error().stack);
+  }
+  return _origGetItem(key, ...rest);
+};
+
 // Configure notifications
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
