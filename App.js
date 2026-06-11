@@ -13,6 +13,9 @@ import { useFonts, Iceland_400Regular } from '@expo-google-fonts/iceland';
 import * as Clipboard from 'expo-clipboard';
 import QRCode from 'react-native-qrcode-svg';
 
+// 1 POH = 1e9 μPOH — matches node's reward.js
+const POH_DECIMALS = 1_000_000_000;
+
 // === Clean imports from the new structured src/ ===
 import { STORAGE_KEYS, DEFAULT_WALLET_NODES } from './src/constants';
 import { createTranslator, detectDefaultLanguage, SUPPORTED_LANGUAGES } from './src/i18n';
@@ -20,6 +23,11 @@ import {
   deriveFromPrivateKey,
   generateNewWallet,
 } from './src/services/wallet';
+import {
+  deriveSigningKeypair,
+  signData,
+  buildSignedTransaction,
+} from './src/services/signing';
 import {
   selectBestNode,
 } from './src/services/nodeClient';
@@ -34,18 +42,37 @@ import {
   WalletsScreen,
   SettingsScreen,
   AIScreen,
+  ChatScreen,
+  P2PScreen,
+  CreateOrderScreen,
+  TradeScreen,
+  MyOrdersScreen,
 } from './src/screens';
 
 // Keep the splash screen visible while we load fonts
 SplashScreen.preventAutoHideAsync();
 
-// Intercept AsyncStorage.getItem with undefined key to capture JS stack trace
+// Guard AsyncStorage against null/undefined keys which crash the native SQLite layer
 const _origGetItem = AsyncStorage.getItem.bind(AsyncStorage);
 AsyncStorage.getItem = (key, ...rest) => {
-  if (typeof key !== 'string') {
+  if (typeof key !== 'string' || !key) {
     console.error('[AsyncStorage] getItem called with non-string key:', key, '\n', new Error().stack);
+    return Promise.resolve(null);
   }
   return _origGetItem(key, ...rest);
+};
+
+const _origSetItem = AsyncStorage.setItem.bind(AsyncStorage);
+AsyncStorage.setItem = (key, value, ...rest) => {
+  if (typeof key !== 'string' || !key) {
+    console.error('[AsyncStorage] setItem called with non-string key:', key, '\n', new Error().stack);
+    return Promise.resolve();
+  }
+  if (typeof value !== 'string') {
+    console.error('[AsyncStorage] setItem called with non-string value for key:', key, typeof value);
+    return Promise.resolve();
+  }
+  return _origSetItem(key, value, ...rest);
 };
 
 // Configure notifications
@@ -99,6 +126,8 @@ export default function PoHMinerWallet() {
   });
 
   const [currentScreen, setCurrentScreen] = useState('home');
+  const [p2pScreen, setP2pScreen] = useState('p2p'); // 'p2p' | 'createOrder' | 'orderDetail' | 'trade' | 'myOrders'
+  const [p2pParams, setP2pParams] = useState({});
   const [wallets, setWallets] = useState([]); // {address, createdAt}[]
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [balances, setBalances] = useState({}); // address -> number
@@ -328,7 +357,7 @@ export default function PoHMinerWallet() {
       const data = await res.json();
       if (typeof data.balance === 'number') {
         const oldBal = balances[address] || 0;
-        const newBal = data.balance;
+        const newBal = data.balance / POH_DECIMALS; // μPOH → POH
 
         setBalances(prev => ({ ...prev, [address]: newBal }));
 
@@ -352,7 +381,11 @@ export default function PoHMinerWallet() {
     try {
       const res = await callNodeApi(`/api/wallet/transactions?address=${address}`);
       const data = await res.json();
-      const nodeTxs = Array.isArray(data.transactions) ? data.transactions : [];
+      // Node stores amounts in μPOH; convert to POH for display
+      const nodeTxs = (Array.isArray(data.transactions) ? data.transactions : []).map(tx => ({
+        ...tx,
+        amount: (tx.amount || 0) / POH_DECIMALS,
+      }));
 
       // Merge local pending (optimistic) with node history
       const merged = [...localPendingTxs.filter(t => t.from === address || t.to === address), ...nodeTxs]
@@ -443,14 +476,23 @@ export default function PoHMinerWallet() {
     }
   }, [nodes.length]); // run when nodes list is loaded
 
-  const onLayoutRootView = useCallback(async () => {
+  // Hide splash as soon as fonts are ready — don't wait for onLayout
+  useEffect(() => {
     if (fontsLoaded) {
-      await SplashScreen.hideAsync();
+      SplashScreen.hideAsync().catch(() => {});
     }
   }, [fontsLoaded]);
 
+  // onLayout kept for screens that still reference it, but it's a no-op now
+  const onLayoutRootView = useCallback(() => {}, []);
+
   if (!fontsLoaded) {
-    return null;
+    return (
+      <View style={{ flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' }}>
+        <StatusBar barStyle="light-content" backgroundColor="#000" />
+        <ActivityIndicator color="#fff" size="large" />
+      </View>
+    );
   }
 
   // ===== Real wallet creation / import (node compatible) =====
@@ -711,7 +753,7 @@ export default function PoHMinerWallet() {
     setLoading(false);
   };
 
-  // ===== REAL SEND - calls the node =====
+  // ===== ON-CHAIN SEND — builds a signed PoHTransaction and submits to mempool =====
   const send = async () => {
     const amount = parseFloat(sendAmount);
     const to = sendTo.trim();
@@ -730,50 +772,65 @@ export default function PoHMinerWallet() {
     }
 
     setLoading(true);
-
-    const payload = {
-      from: selectedAddress,
-      to,
-      amount,
-    };
-
-    const url = activeNodeUrl;
     try {
-      const res = await callNodeApi(`/api/wallet/send`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || json.error) {
-        const msg = json.error || 'Send failed';
-        Alert.alert(t('send.failed_title'), t('send.failed_tip', { msg }));
+      const privateKeyHex = await getPrivateKey(selectedAddress);
+      if (!privateKeyHex) {
+        Alert.alert(t('error'), 'Private key not found for this wallet');
         setLoading(false);
         return;
       }
 
-      // Success path
+      // Derive deterministic ed25519 signing keypair from wallet private key
+      const { secretKey, signingPublicKey } = await deriveSigningKeypair(privateKeyHex);
+
+      // Register signing public key with node (idempotent — safe to call every time)
+      const proof = signData(selectedAddress, secretKey);
+      try {
+        await callNodeApi('/api/wallet/register-key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address: selectedAddress, signingPublicKey, proof }),
+        });
+      } catch {
+        // Non-fatal: submit will fail with a clear error if key isn't registered
+      }
+
+      // Fetch confirmed nonce — tx nonce must be confirmedNonce + 1
+      const nonceRes = await callNodeApi(`/api/wallet/nonce?address=${selectedAddress}`);
+      const nonceData = await nonceRes.json();
+      if (nonceData.error) throw new Error(nonceData.error);
+      const nonce = (nonceData.nonce || 0) + 1;
+
+      // Build and sign the transaction
+      const signedTx = await buildSignedTransaction({ from: selectedAddress, to, amount, fee: 0, nonce, secretKey });
+
+      // Submit to mempool — node validates signature + nonce + balance, gossips to peers
+      const res = await callNodeApi('/api/tx/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(signedTx),
+      });
+      const json = await res.json();
+
+      if (!res.ok || json.error) {
+        Alert.alert(t('send.failed_title'), t('send.failed_tip', { msg: json.error || 'Submit failed' }));
+        setLoading(false);
+        return;
+      }
+
+      // Record locally as pending — status updates to 'mined' once included in a block
       const newTx = {
-        id: 'local-' + Date.now(),
+        id: signedTx.txHash,
         type: 'send',
         from: selectedAddress,
         to,
         amount,
         timestamp: Date.now(),
-        status: 'confirmed',
+        status: 'pending',
       };
-
       const updatedLocal = [newTx, ...localPendingTxs].slice(0, 200);
       setLocalPendingTxs(updatedLocal);
       await Storage.saveLocalTxs(updatedLocal);
-
-      // Optimistic local balance update
-      const newBal = Math.max(0, currentBalance - amount);
-      setBalances(prev => ({ ...prev, [selectedAddress]: newBal }));
-
-      // Record in visible tx list immediately
       setTxs(prev => [newTx, ...prev]);
 
       setSendTo('');
@@ -782,14 +839,13 @@ export default function PoHMinerWallet() {
 
       await showNotification(t('notif.tx_sent_title'), t('notif.tx_sent_body', { amount, to: to.slice(0, 12) }));
 
-      // Refresh real state from node shortly after
-      setTimeout(() => refreshAll(true), 1200);
+      // Refresh balance + tx history after ~1 block time (≈10s)
+      setTimeout(() => refreshAll(true), 10_000);
 
       Alert.alert(t('send.success_title'), t('send.success_body', { amount, to }));
     } catch (e) {
       Alert.alert(t('error.network'), t('send.network_error'));
     }
-
     setLoading(false);
   };
 
@@ -826,6 +882,8 @@ export default function PoHMinerWallet() {
     const tabs = [
       { key: 'home',     icon: '●', iconOff: '○', label: t('tab.home') },
       { key: 'history',  icon: '⇄', iconOff: '⇄', label: t('tab.history') },
+      { key: 'p2p',      icon: '⇋', iconOff: '⇋', label: 'P2P' },
+      { key: 'chat',     icon: '✦', iconOff: '✦', label: 'Ask AI' },
       { key: 'search',   icon: '⊙', iconOff: '⊙', label: 'Scan' },
       { key: 'settings', icon: '⚙', iconOff: '⚙', label: 'Settings' },
     ];
@@ -838,7 +896,10 @@ export default function PoHMinerWallet() {
             <TouchableOpacity
               key={tab.key}
               style={styles.tab}
-              onPress={() => setCurrentScreen(tab.key)}
+              onPress={() => {
+                if (tab.key === 'p2p') { setP2pScreen('p2p'); setP2pParams({}); }
+                setCurrentScreen(tab.key);
+              }}
             >
               <Text style={[styles.tabIcon, isActive && styles.tabIconActive]}>
                 {isActive ? tab.icon : tab.iconOff}
@@ -1223,6 +1284,23 @@ export default function PoHMinerWallet() {
     );
   }
 
+  if (currentScreen === 'chat') {
+    return (
+      <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
+        <StatusBar barStyle="light-content" />
+        <Header title="Ask AI" />
+        <View style={{ flex: 1 }}>
+          <ChatScreen
+            activeNodeUrl={activeNodeUrl}
+            selectedAddress={selectedAddress}
+            balances={balances}
+          />
+        </View>
+        <TabBar />
+      </SafeAreaView>
+    );
+  }
+
   if (currentScreen === 'search') {
     return (
       <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
@@ -1447,6 +1525,68 @@ export default function PoHMinerWallet() {
           <Text style={{ color: '#6b7280', fontFamily: 'Iceland_400Regular' }}>{t('wallets.done')}</Text>
         </TouchableOpacity>
 
+        <TabBar />
+      </SafeAreaView>
+    );
+  }
+
+  // ── P2P Exchange screens ───────────────────────────────────────────────────
+  if (currentScreen === 'p2p') {
+    const p2pNavigate = (screen, params = {}) => {
+      setP2pScreen(screen);
+      setP2pParams(params);
+      if (screen === 'p2p') {
+        // staying in p2p root — no currentScreen change needed
+      }
+    };
+
+    const commonProps = {
+      selectedAddress,
+      activeNodeUrl,
+      getPrivateKey,
+      onNavigate: p2pNavigate,
+      t,
+    };
+
+    if (p2pScreen === 'createOrder') {
+      return (
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} onLayout={onLayoutRootView}>
+          <StatusBar barStyle="light-content" backgroundColor="#000" />
+          <CreateOrderScreen {...commonProps} defaultSide={p2pParams.defaultSide || 'sell'} />
+          <TabBar />
+        </SafeAreaView>
+      );
+    }
+
+    if (p2pScreen === 'orderDetail' || p2pScreen === 'trade') {
+      return (
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} onLayout={onLayoutRootView}>
+          <StatusBar barStyle="light-content" backgroundColor="#000" />
+          <TradeScreen
+            {...commonProps}
+            orderId={p2pParams.orderId}
+            tradeId={p2pParams.tradeId}
+          />
+          <TabBar />
+        </SafeAreaView>
+      );
+    }
+
+    if (p2pScreen === 'myOrders') {
+      return (
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} onLayout={onLayoutRootView}>
+          <StatusBar barStyle="light-content" backgroundColor="#000" />
+          <MyOrdersScreen {...commonProps} />
+          <TabBar />
+        </SafeAreaView>
+      );
+    }
+
+    // Default: order book
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} onLayout={onLayoutRootView}>
+        <StatusBar barStyle="light-content" backgroundColor="#000" />
+        <P2PScreen {...commonProps} />
         <TabBar />
       </SafeAreaView>
     );

@@ -7,6 +7,7 @@ import * as Clipboard from 'expo-clipboard';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 
 const BASE = 'https://proofofhuman.ge';
+// const BASE = 'http://localhost:3456'; // for local dev against miner
 
 export default function AIScreen({ t, wallets = [], selectedAddress, balances = {}, setSelectedAddress, saveSelectedAddress }) {
   // --- Connected wallet (uses app state) ---
