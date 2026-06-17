@@ -4,6 +4,7 @@ import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 const TABS = [
   { key: 'home', labelKey: 'tab.home' },
   { key: 'history', labelKey: 'tab.history' },
+  { key: 'p2p', label: 'P2P' },
   { key: 'search', label: 'AI' },
   { key: 'wallets', labelKey: 'tab.wallets' },
 ];
