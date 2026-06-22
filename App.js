@@ -193,6 +193,13 @@ export default function PoHMinerWallet() {
         } else if (list.length > 0) {
           setSelectedAddress(list[0].address);
         }
+        if (list.length === 0) {
+          setCurrentScreen('settings');
+          setSettingsTab('wallets');
+        }
+      } else {
+        setCurrentScreen('settings');
+        setSettingsTab('wallets');
       }
 
       let loadedNodes = [];
