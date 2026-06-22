@@ -1,17 +1,63 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
-  ActivityIndicator, StyleSheet, Alert,
+  ActivityIndicator, StyleSheet, Alert, PanResponder,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 
-const BUDGET_PRESETS = [1, 5, 10, 25, 50, 100, 250, 500];
+const LOG_MIN = 0.01, LOG_MAX = 200, LOG_STEPS = 200;
+const _stepToPoh = s => s <= 0 ? 0 : LOG_MIN * Math.pow(LOG_MAX / LOG_MIN, (s - 1) / (LOG_STEPS - 1));
+const _pohToStep = v => v <= 0 ? 0 : Math.round(1 + (LOG_STEPS - 1) * Math.log(v / LOG_MIN) / Math.log(LOG_MAX / LOG_MIN));
+const _fmtPoh = p => p < 0.1 ? p.toFixed(3) : p < 10 ? p.toFixed(2) : p < 100 ? p.toFixed(1) : Math.round(p).toString();
+
+function LogSlider({ value, onChange, disabled }) {
+  const [trackWidth, setTrackWidth] = useState(1);
+  const step = _pohToStep(value);
+  const fillPct = step <= 0 ? 0 : ((step - 1) / (LOG_STEPS - 1)) * 100;
+  const stepRef = useRef(step);
+  stepRef.current = step;
+  const trackWidthRef = useRef(trackWidth);
+  trackWidthRef.current = trackWidth;
+
+  const clampStep = (x) => {
+    const s = Math.round((x / trackWidthRef.current) * LOG_STEPS);
+    return Math.max(0, Math.min(LOG_STEPS, s));
+  };
+
+  const panResponder = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => !disabled,
+    onMoveShouldSetPanResponder: () => !disabled,
+    onPanResponderGrant: (e) => onChange(_stepToPoh(clampStep(e.nativeEvent.locationX))),
+    onPanResponderMove: (e) => onChange(_stepToPoh(clampStep(e.nativeEvent.locationX))),
+  })).current;
+
+  return (
+    <View
+      onLayout={e => setTrackWidth(e.nativeEvent.layout.width)}
+      {...panResponder.panHandlers}
+      style={{ height: 36, justifyContent: 'center', paddingVertical: 10 }}
+    >
+      <View style={{ height: 3, backgroundColor: '#2a2a2a', borderRadius: 2 }}>
+        <View style={{ width: `${fillPct}%`, height: 3, backgroundColor: '#22c55e', borderRadius: 2 }} />
+      </View>
+      {step > 0 && (
+        <View style={{
+          position: 'absolute',
+          left: `${fillPct}%`,
+          marginLeft: -7,
+          top: 11, width: 14, height: 14,
+          borderRadius: 7, backgroundColor: '#22c55e',
+        }} />
+      )}
+    </View>
+  );
+}
 const POLL_INTERVAL_MS = 2000;
 const POLL_TIMEOUT_MS = 120_000;
 
 export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress, balances }) {
   const [message, setMessage]     = useState('');
-  const [budget, setBudget]       = useState(1);
+  const [budget, setBudget]       = useState(0);
   const [loading, setLoading]     = useState(false);
   const [statusText, setStatusText] = useState('');
   const [result, setResult]       = useState(null);
@@ -205,26 +251,11 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
         editable={!loading}
       />
 
-      <Text style={s.label}>MAX FEE <Text style={s.labelNote}>(only for data skill queries)</Text></Text>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={s.feeScroll}
-        contentContainerStyle={s.feeScrollContent}
-      >
-        {BUDGET_PRESETS.map(p => (
-          <TouchableOpacity
-            key={p}
-            style={[s.feeChip, budget === p && s.feeChipActive]}
-            onPress={() => setBudget(p)}
-            disabled={loading}
-          >
-            <Text style={[s.feeChipText, budget === p && s.feeChipTextActive]}>
-              {p} POH
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      <View style={s.feeRow}>
+        <Text style={s.label}>MAX FEE <Text style={s.labelNote}>(data skills only)</Text></Text>
+        <Text style={s.feeValue}>{budget <= 0 ? 'No limit' : `${_fmtPoh(budget)} POH`}</Text>
+      </View>
+      <LogSlider value={budget} onChange={setBudget} disabled={loading} />
       <Text style={s.feeNote}>
         Balance: {balance.toFixed(2)} POH · fee only deducted when a data skill is used
       </Text>
@@ -307,19 +338,11 @@ const s = StyleSheet.create({
     minHeight: 80, textAlignVertical: 'top',
   },
 
-  label: { color: '#4b5563', fontSize: 10, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular', marginBottom: 8 },
+  label: { color: '#4b5563', fontSize: 10, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular' },
   labelNote: { color: '#374151', letterSpacing: 0, textTransform: 'none' },
-  feeScroll: { marginBottom: 4 },
-  feeScrollContent: { gap: 8, paddingRight: 4 },
-  feeChip: {
-    paddingHorizontal: 16, paddingVertical: 9,
-    backgroundColor: '#111', borderRadius: 20,
-    borderWidth: 1, borderColor: '#222',
-  },
-  feeChipActive: { backgroundColor: '#0f1a0f', borderColor: '#22c55e' },
-  feeChipText: { color: '#9ca3af', fontSize: 12, fontFamily: 'Iceland_400Regular' },
-  feeChipTextActive: { color: '#22c55e' },
-  feeNote: { color: '#374151', fontSize: 10, fontFamily: 'Iceland_400Regular', marginBottom: 16, marginTop: 4 },
+  feeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  feeValue: { color: '#22c55e', fontSize: 12, fontFamily: 'Iceland_400Regular' },
+  feeNote: { color: '#374151', fontSize: 10, fontFamily: 'Iceland_400Regular', marginBottom: 12, marginTop: 2 },
 
   errorBox: {
     backgroundColor: '#1c0a0a', borderRadius: 8, padding: 12, marginBottom: 12,
