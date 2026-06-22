@@ -159,16 +159,18 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
         }
         if (tries > maxTries) {
           setBrainPolling(false);
+          setBrainVerdict({ status: 'done', verdict: 'UNCERTAIN', confidence: 0, reasoning: 'Analysis timed out. The network may be busy — try scanning again.' });
           clearInterval(iv);
         }
       } catch {
         // keep polling
       }
     }, 3000);
-    // safety cleanup
+    // safety cleanup — also set fallback verdict so results don't vanish
     setTimeout(() => {
       clearInterval(iv);
       setBrainPolling(false);
+      setBrainVerdict(v => v || { status: 'done', verdict: 'UNCERTAIN', confidence: 0, reasoning: 'Analysis timed out. Try scanning again.' });
     }, 3 * 60 * 1000);
   }
 
@@ -779,8 +781,8 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
             </View>
           )}
 
-          {/* FULL PROFILE attached to AI verdict, like frontend WalletProfile with avatar, badges, identity, graph etc. */}
-          {(scanProfileLoading || scanProfile) && brainVerdict && (
+          {/* FULL PROFILE attached to AI verdict */}
+          {brainVerdict && (scanProfileLoading || scanProfile) && (
             <View style={styles.profileCardWrap}>
               {scanProfileLoading && (
                 <View style={styles.profileLoading}>
@@ -788,7 +790,7 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
                   <Text style={styles.profileLoadingText}>Loading full profile…</Text>
                 </View>
               )}
-              {scanProfile && renderFullProfile()}
+              {!scanProfileLoading && scanProfile && renderFullProfile()}
             </View>
           )}
 

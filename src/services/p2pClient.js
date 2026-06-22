@@ -1,11 +1,22 @@
 import { deriveSigningKeypair, signData } from './signing';
 
 // Build a signed auth payload for P2P mutating requests.
-// secretKey: Uint8Array nacl secret key derived from user's private key.
 async function buildAuth(address, signingPublicKey, secretKey, actionFields) {
   const payload = { address, timestamp: Date.now(), ...actionFields };
   const signature = signData(JSON.stringify(payload), secretKey);
   return { address, signingPublicKey, signature, timestamp: payload.timestamp };
+}
+
+// Register the signing key with the node (idempotent — safe to call before any mutating action).
+async function registerSigningKey(nodeUrl, address, signingPublicKey, secretKey) {
+  try {
+    const proof = signData(address, secretKey);
+    await fetch(`${nodeUrl}/api/wallet/register-key`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address, signingPublicKey, proof }),
+    });
+  } catch { /* non-fatal */ }
 }
 
 // Derive signing keypair from private key hex (cached per session by caller).
@@ -43,6 +54,7 @@ export async function fetchCurrencies(nodeUrl) {
 
 export async function createOrder(nodeUrl, { address, privateKeyHex, side, pohAmount, quoteCurrency, pricePerPOH, minTrade, maxTrade, paymentMethods }) {
   const { signingPublicKey, secretKey } = await getSigningKeys(privateKeyHex);
+  await registerSigningKey(nodeUrl, address, signingPublicKey, secretKey);
   const auth = await buildAuth(address, signingPublicKey, secretKey, {
     action: 'create-order', side, pohAmount,
   });
@@ -57,6 +69,7 @@ export async function createOrder(nodeUrl, { address, privateKeyHex, side, pohAm
 
 export async function cancelOrder(nodeUrl, { address, privateKeyHex, orderId }) {
   const { signingPublicKey, secretKey } = await getSigningKeys(privateKeyHex);
+  await registerSigningKey(nodeUrl, address, signingPublicKey, secretKey);
   const auth = await buildAuth(address, signingPublicKey, secretKey, { action: 'cancel-order', orderId });
   const res = await fetch(`${nodeUrl}/api/p2p/orders/${orderId}/cancel`, {
     method: 'POST',
@@ -70,6 +83,7 @@ export async function cancelOrder(nodeUrl, { address, privateKeyHex, orderId }) 
 
 export async function selectOrder(nodeUrl, { address, privateKeyHex, orderId, pohAmount, quoteAmount }) {
   const { signingPublicKey, secretKey } = await getSigningKeys(privateKeyHex);
+  await registerSigningKey(nodeUrl, address, signingPublicKey, secretKey);
   const auth = await buildAuth(address, signingPublicKey, secretKey, {
     action: 'select-order', orderId, pohAmount, quoteAmount,
   });
@@ -94,6 +108,7 @@ export async function fetchTrade(nodeUrl, tradeId) {
 
 async function tradeAction(nodeUrl, { address, privateKeyHex, tradeId, action, extra = {} }) {
   const { signingPublicKey, secretKey } = await getSigningKeys(privateKeyHex);
+  await registerSigningKey(nodeUrl, address, signingPublicKey, secretKey);
   const auth = await buildAuth(address, signingPublicKey, secretKey, { action, tradeId });
   const res = await fetch(`${nodeUrl}/api/p2p/trades/${tradeId}/${action}`, {
     method: 'POST',

@@ -7,7 +7,7 @@ import { fetchOrders, fetchCurrencies } from '../services/p2pClient';
 
 const CURRENCIES = [
   'USDT-ERC20', 'USDT-TRC20', 'USDT-TON', 'USDT-SOL', 'USDT-BEP20',
-  'BTC', 'ETH', 'SOL', 'USDC',
+  'BTC', 'ETH', 'SOL', 'USDC-ERC20',
 ];
 
 function formatPOH(uPOH) {

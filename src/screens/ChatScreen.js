@@ -35,7 +35,7 @@ export default function ChatScreen({ activeNodeUrl, selectedAddress, balances })
       const askRes = await fetch(`${base}/chat/ask`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: q }),
+        body: JSON.stringify({ message: q, walletAddress: selectedAddress, address: selectedAddress }),
       });
       const askData = await askRes.json();
       if (!askRes.ok) throw new Error(askData.error || 'Network error');

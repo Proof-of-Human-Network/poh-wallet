@@ -149,6 +149,7 @@ export default function PoHMinerWallet() {
 
   const pollRef = useRef(null);
   const prevBalanceRef = useRef(0);
+  const [pohUsdRate, setPohUsdRate] = useState(1.50);
 
   const selectedWallet = wallets.find(w => w.address === selectedAddress) || wallets[0] || null;
   const currentBalance = selectedAddress ? (balances[selectedAddress] || 0) : 0;
@@ -398,11 +399,31 @@ export default function PoHMinerWallet() {
     }
   }
 
+  async function fetchBestPohRate() {
+    if (!activeNodeUrl) return;
+    try {
+      let bestRate = null;
+      for (const cur of ['USDT-ERC20', 'USDC-ERC20', 'USDT-TRC20']) {
+        const res = await fetch(`${activeNodeUrl.replace(/\/$/, '')}/api/p2p/orders?side=sell&quoteCurrency=${cur}&status=open`);
+        if (!res.ok) continue;
+        const data = await res.json();
+        const orders = data.orders || [];
+        for (const o of orders) {
+          if (o.pricePerPOH > 0 && (bestRate === null || o.pricePerPOH > bestRate)) {
+            bestRate = o.pricePerPOH;
+          }
+        }
+      }
+      if (bestRate !== null) setPohUsdRate(bestRate);
+    } catch { /* keep previous rate */ }
+  }
+
   async function refreshAll(silent = false) {
     if (!selectedAddress) return;
     await Promise.all([
       fetchBalance(selectedAddress, silent),
       fetchTransactions(selectedAddress),
+      fetchBestPohRate(),
     ]);
   }
 
@@ -880,18 +901,17 @@ export default function PoHMinerWallet() {
 
   const TabBar = () => {
     const tabs = [
-      { key: 'home',     icon: '●', iconOff: '○', label: t('tab.home') },
-      { key: 'history',  icon: '⇄', iconOff: '⇄', label: t('tab.history') },
-      { key: 'p2p',      icon: '⇋', iconOff: '⇋', label: 'P2P' },
-      { key: 'chat',     icon: '✦', iconOff: '✦', label: 'Ask AI' },
-      { key: 'search',   icon: '⊙', iconOff: '⊙', label: 'Scan' },
-      { key: 'settings', icon: '⚙', iconOff: '⚙', label: 'Settings' },
+      { key: 'home',    icon: '●', iconOff: '○', label: t('tab.home') },
+      { key: 'history', icon: '⇄', iconOff: '⇄', label: t('tab.history') },
+      { key: 'p2p',     icon: '⇋', iconOff: '⇋', label: 'P2P' },
+      { key: 'chat',    icon: '✦', iconOff: '✦', label: 'Ask AI' },
+      { key: 'search',  icon: '⊙', iconOff: '⊙', label: 'Scan' },
     ];
 
     return (
       <View style={styles.tabBar}>
         {tabs.map(tab => {
-          const isActive = currentScreen === tab.key || (tab.key === 'settings' && currentScreen === 'wallets');
+          const isActive = currentScreen === tab.key;
           return (
             <TouchableOpacity
               key={tab.key}
@@ -927,7 +947,7 @@ export default function PoHMinerWallet() {
             <Text style={styles.balance}>{currentBalance.toFixed(2)}</Text>
             <Text style={styles.balanceCurrency}> POH</Text>
           </View>
-          <Text style={styles.usd}>≈ ${(currentBalance * 1.50).toFixed(2)} USD</Text>
+          <Text style={styles.usd}>≈ ${(currentBalance * pohUsdRate).toFixed(2)} USD</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
             {loading && <ActivityIndicator color="#22c55e" size="small" style={{ marginRight: 8 }} />}
             <TouchableOpacity onPress={copyAddress} style={{ flex: 1 }}>

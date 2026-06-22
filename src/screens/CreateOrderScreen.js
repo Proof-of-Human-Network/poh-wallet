@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   ScrollView, Alert, ActivityIndicator,
@@ -9,20 +9,48 @@ const POH_DECIMALS = 1_000_000_000;
 
 const CURRENCIES = [
   'USDT-ERC20', 'USDT-TRC20', 'USDT-TON', 'USDT-SOL', 'USDT-BEP20',
-  'BTC', 'ETH', 'SOL', 'USDC',
+  'BTC', 'ETH', 'SOL', 'USDC-ERC20',
 ];
+
+const NETWORK_OPTIONS = {
+  'USDT-ERC20':  ['ERC20'],
+  'USDT-TRC20':  ['TRC20'],
+  'USDT-TON':    ['TON'],
+  'USDT-SOL':    ['SOL'],
+  'USDT-BEP20':  ['BEP20'],
+  'BTC':         ['Lightning', 'On-chain'],
+  'ETH':         ['ERC20'],
+  'SOL':         ['SOL'],
+  'USDC-ERC20':  ['ERC20'],
+};
+
+function defaultNetwork(cur) {
+  const nets = NETWORK_OPTIONS[cur] || [];
+  return nets.length === 1 ? nets[0] : '';
+}
 
 export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getPrivateKey, onNavigate }) {
   const side = 'sell';
   const [quoteCurrency, setQuoteCurrency] = useState('USDT-ERC20');
-  const [pohAmount, setPohAmount] = useState('');       // display POH
-  const [pricePerPOH, setPricePerPOH] = useState('');   // quote per 1 POH
+  const [pohAmount, setPohAmount] = useState('');
+  const [pricePerPOH, setPricePerPOH] = useState('');
   const [minTrade, setMinTrade] = useState('');
   const [maxTrade, setMaxTrade] = useState('');
-  const [methods, setMethods] = useState([{ network: '', address: '', details: '' }]);
+  const [methods, setMethods] = useState([{ network: defaultNetwork('USDT-ERC20'), address: '', details: '' }]);
   const [submitting, setSubmitting] = useState(false);
 
-  const addMethod = () => setMethods(m => [...m, { network: '', address: '', details: '' }]);
+  // Auto-update network when currency changes (single-network currencies)
+  useEffect(() => {
+    const nets = NETWORK_OPTIONS[quoteCurrency] || [];
+    if (nets.length === 1) {
+      setMethods(m => m.map(item => ({ ...item, network: nets[0] })));
+    }
+  }, [quoteCurrency]);
+
+  const addMethod = () => {
+    const net = defaultNetwork(quoteCurrency);
+    setMethods(m => [...m, { network: net, address: '', details: '' }]);
+  };
   const removeMethod = (i) => setMethods(m => m.filter((_, idx) => idx !== i));
   const updateMethod = (i, field, val) =>
     setMethods(m => m.map((item, idx) => idx === i ? { ...item, [field]: val } : item));
@@ -154,39 +182,47 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
       {/* Payment methods */}
       <View style={styles.section}>
         <Text style={styles.label}>Payment Methods</Text>
-        {methods.map((m, i) => (
-          <View key={i} style={styles.methodBlock}>
-            <View style={styles.methodHeader}>
-              <Text style={styles.methodIndex}>Method {i + 1}</Text>
-              {i > 0 && (
-                <TouchableOpacity onPress={() => removeMethod(i)}>
-                  <Text style={styles.removeBtn}>Remove</Text>
-                </TouchableOpacity>
-              )}
+        {methods.map((m, i) => {
+          const nets = NETWORK_OPTIONS[quoteCurrency] || [];
+          return (
+            <View key={i} style={styles.methodBlock}>
+              <View style={styles.methodHeader}>
+                <Text style={styles.methodIndex}>Method {i + 1}</Text>
+                {i > 0 && (
+                  <TouchableOpacity onPress={() => removeMethod(i)}>
+                    <Text style={styles.removeBtn}>Remove</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              <Text style={[styles.label, { marginBottom: 6 }]}>Network</Text>
+              <View style={styles.networkRow}>
+                {nets.map(net => (
+                  <TouchableOpacity
+                    key={net}
+                    style={[styles.networkPill, m.network === net && styles.networkPillActive]}
+                    onPress={() => updateMethod(i, 'network', net)}
+                  >
+                    <Text style={[styles.networkPillText, m.network === net && styles.networkPillTextActive]}>{net}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TextInput
+                style={[styles.input, { marginTop: 10 }]}
+                placeholder="Your wallet / account address"
+                placeholderTextColor="#555"
+                value={m.address}
+                onChangeText={v => updateMethod(i, 'address', v)}
+              />
+              <TextInput
+                style={[styles.input, { marginTop: 6 }]}
+                placeholder="Extra details (optional)"
+                placeholderTextColor="#555"
+                value={m.details}
+                onChangeText={v => updateMethod(i, 'details', v)}
+              />
             </View>
-            <TextInput
-              style={styles.input}
-              placeholder="Network (e.g. TRC20, ERC20, Lightning)"
-              placeholderTextColor="#555"
-              value={m.network}
-              onChangeText={v => updateMethod(i, 'network', v)}
-            />
-            <TextInput
-              style={[styles.input, { marginTop: 6 }]}
-              placeholder="Your wallet / account address"
-              placeholderTextColor="#555"
-              value={m.address}
-              onChangeText={v => updateMethod(i, 'address', v)}
-            />
-            <TextInput
-              style={[styles.input, { marginTop: 6 }]}
-              placeholder="Extra details (optional)"
-              placeholderTextColor="#555"
-              value={m.details}
-              onChangeText={v => updateMethod(i, 'details', v)}
-            />
-          </View>
-        ))}
+          );
+        })}
         <TouchableOpacity style={styles.addMethodBtn} onPress={addMethod}>
           <Text style={styles.addMethodText}>+ Add payment method</Text>
         </TouchableOpacity>
@@ -230,6 +266,12 @@ const styles = StyleSheet.create({
   removeBtn: { color: '#dc2626', fontSize: 11, fontFamily: 'Iceland_400Regular' },
   addMethodBtn: { borderWidth: 1, borderColor: '#333', borderRadius: 8, paddingVertical: 10, alignItems: 'center', borderStyle: 'dashed' },
   addMethodText: { color: '#555', fontFamily: 'Iceland_400Regular', fontSize: 13 },
+
+  networkRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  networkPill: { borderRadius: 8, borderWidth: 1, borderColor: '#333', paddingHorizontal: 14, paddingVertical: 7 },
+  networkPillActive: { borderColor: '#22c55e', backgroundColor: '#052e16' },
+  networkPillText: { color: '#888', fontSize: 13, fontFamily: 'Iceland_400Regular' },
+  networkPillTextActive: { color: '#22c55e' },
 
   submitBtn: { marginHorizontal: 16, backgroundColor: '#22c55e', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
   submitText: { color: '#000', fontSize: 16, fontWeight: '700', fontFamily: 'Iceland_400Regular' },
