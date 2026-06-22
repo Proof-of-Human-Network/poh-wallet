@@ -30,12 +30,19 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
     for (const url of candidates) {
       try {
         const base = url.replace(/\/$/, '');
-        const res = await fetch(`${base}/chat/ask`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: q, walletAddress: selectedAddress, address: selectedAddress }),
-          signal: AbortSignal.timeout(35_000),
-        });
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 35_000);
+        let res;
+        try {
+          res = await fetch(`${base}/chat/ask`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: q, walletAddress: selectedAddress, address: selectedAddress }),
+            signal: ctrl.signal,
+          });
+        } finally {
+          clearTimeout(timer);
+        }
         if (!res.ok) { lastErr = (await res.json().catch(() => ({}))).error || `HTTP ${res.status}`; continue; }
         const data = await res.json();
         return { data, base };
