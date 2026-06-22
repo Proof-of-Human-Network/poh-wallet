@@ -1312,6 +1312,7 @@ export default function PoHMinerWallet() {
         <View style={{ flex: 1 }}>
           <ChatScreen
             activeNodeUrl={activeNodeUrl}
+            nodes={nodes}
             selectedAddress={selectedAddress}
             balances={balances}
           />

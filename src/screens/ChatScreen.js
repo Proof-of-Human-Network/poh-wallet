@@ -9,7 +9,7 @@ const BUDGET_PRESETS = [1, 5, 10, 25, 50, 100, 250, 500];
 const POLL_INTERVAL_MS = 2000;
 const POLL_TIMEOUT_MS = 120_000;
 
-export default function ChatScreen({ activeNodeUrl, selectedAddress, balances }) {
+export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress, balances }) {
   const [message, setMessage]     = useState('');
   const [budget, setBudget]       = useState(1);
   const [loading, setLoading]     = useState(false);
@@ -18,6 +18,31 @@ export default function ChatScreen({ activeNodeUrl, selectedAddress, balances })
   const [error, setError]         = useState(null);
 
   const balance = selectedAddress ? (balances?.[selectedAddress] ?? 0) : 0;
+
+  // Try /chat/ask on each node until one responds usefully
+  async function askNode(q) {
+    const candidates = [
+      activeNodeUrl,
+      ...nodes.map(n => n.url).filter(u => u !== activeNodeUrl),
+    ].filter(Boolean);
+
+    let lastErr = null;
+    for (const url of candidates) {
+      try {
+        const base = url.replace(/\/$/, '');
+        const res = await fetch(`${base}/chat/ask`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: q, walletAddress: selectedAddress, address: selectedAddress }),
+          signal: AbortSignal.timeout(35_000),
+        });
+        if (!res.ok) { lastErr = (await res.json().catch(() => ({}))).error || `HTTP ${res.status}`; continue; }
+        const data = await res.json();
+        return { data, base };
+      } catch (e) { lastErr = e.message; }
+    }
+    throw new Error(lastErr || 'All nodes unreachable for chat');
+  }
 
   const submit = async () => {
     const q = message.trim();
@@ -28,21 +53,14 @@ export default function ChatScreen({ activeNodeUrl, selectedAddress, balances })
     setResult(null);
     setError(null);
 
-    const base = activeNodeUrl.replace(/\/$/, '');
-
     try {
       setStatusText('Thinking...');
-      const askRes = await fetch(`${base}/chat/ask`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: q, walletAddress: selectedAddress, address: selectedAddress }),
-      });
-      const askData = await askRes.json();
-      if (!askRes.ok) throw new Error(askData.error || 'Network error');
+      const { data: askData, base } = await askNode(q);
 
       // ── Free LLM answer — no job, no fee ─────────────────────────────────
       if (askData.type === 'chat') {
-        setResult({ type: 'chat', message: askData.message || '(no response)', skillId: null, jobId: null });
+        const msg = askData.message || askData.reply || '(no response)';
+        setResult({ type: 'chat', message: msg, skillId: null, jobId: null });
         setStatusText('');
         return;
       }
