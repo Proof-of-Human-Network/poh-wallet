@@ -31,7 +31,7 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
       try {
         const base = url.replace(/\/$/, '');
         const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 35_000);
+        const timer = setTimeout(() => ctrl.abort(), 75_000);
         let res;
         try {
           res = await fetch(`${base}/chat/ask`, {
