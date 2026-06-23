@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#111',
   },
   tabActive: { borderTopWidth: 3, borderTopColor: '#22c55e' },
-  tabText: { color: '#888', fontSize: 11, fontFamily: 'Iceland_400Regular' },
-  centerTabText: { color: '#888', fontSize: 11, fontFamily: 'Iceland_400Regular', fontWeight: '600' },
+  tabText: { color: '#888', fontSize: 14, fontFamily: 'Iceland_400Regular' },
+  centerTabText: { color: '#888', fontSize: 14, fontFamily: 'Iceland_400Regular', fontWeight: '600' },
   tabTextActive: { color: '#22c55e', fontWeight: '600', fontFamily: 'Iceland_400Regular' },
 });

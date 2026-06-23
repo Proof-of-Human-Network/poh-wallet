@@ -328,8 +328,8 @@ const s = StyleSheet.create({
   root: { flex: 1 },
   content: { paddingBottom: 20 },
 
-  heading: { color: '#4b5563', fontSize: 10, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular', marginBottom: 4 },
-  sub: { color: '#6b7280', fontSize: 12, fontFamily: 'Iceland_400Regular', marginBottom: 16 },
+  heading: { color: '#4b5563', fontSize: 13, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular', marginBottom: 4 },
+  sub: { color: '#6b7280', fontSize: 15, fontFamily: 'Iceland_400Regular', marginBottom: 16 },
 
   input: {
     backgroundColor: '#111', color: '#fff', padding: 14,
@@ -338,17 +338,17 @@ const s = StyleSheet.create({
     minHeight: 80, textAlignVertical: 'top',
   },
 
-  label: { color: '#4b5563', fontSize: 10, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular' },
+  label: { color: '#4b5563', fontSize: 13, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular' },
   labelNote: { color: '#374151', letterSpacing: 0, textTransform: 'none' },
   feeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  feeValue: { color: '#22c55e', fontSize: 12, fontFamily: 'Iceland_400Regular' },
-  feeNote: { color: '#374151', fontSize: 10, fontFamily: 'Iceland_400Regular', marginBottom: 12, marginTop: 2 },
+  feeValue: { color: '#22c55e', fontSize: 15, fontFamily: 'Iceland_400Regular' },
+  feeNote: { color: '#374151', fontSize: 13, fontFamily: 'Iceland_400Regular', marginBottom: 12, marginTop: 2 },
 
   errorBox: {
     backgroundColor: '#1c0a0a', borderRadius: 8, padding: 12, marginBottom: 12,
     borderWidth: 1, borderColor: '#ef4444',
   },
-  errorText: { color: '#ef4444', fontSize: 12, fontFamily: 'Iceland_400Regular' },
+  errorText: { color: '#ef4444', fontSize: 15, fontFamily: 'Iceland_400Regular' },
 
   submitBtn: { backgroundColor: '#22c55e', padding: 16, borderRadius: 4, alignItems: 'center', marginBottom: 16 },
   submitBtnDisabled: { backgroundColor: '#166534', opacity: 0.7 },
@@ -360,20 +360,20 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: '#1f2f1f',
   },
   resultHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  resultHeader: { color: '#22c55e', fontSize: 10, fontFamily: 'Iceland_400Regular', letterSpacing: 1, flex: 1 },
+  resultHeader: { color: '#22c55e', fontSize: 13, fontFamily: 'Iceland_400Regular', letterSpacing: 1, flex: 1 },
   copyBtn: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4, borderWidth: 1, borderColor: '#2a2a2a' },
-  copyBtnText: { color: '#6b7280', fontSize: 11, fontFamily: 'Iceland_400Regular' },
+  copyBtnText: { color: '#6b7280', fontSize: 14, fontFamily: 'Iceland_400Regular' },
   resultScroll: { maxHeight: 420 },
   resultText: { color: '#e5e7eb', fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 20 },
-  resultJson: { color: '#9ca3af', fontSize: 11, fontFamily: 'Iceland_400Regular', lineHeight: 16 },
-  resultSection: { color: '#4b5563', fontSize: 9, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular', marginTop: 12, marginBottom: 4 },
+  resultJson: { color: '#9ca3af', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 16 },
+  resultSection: { color: '#4b5563', fontSize: 15, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular', marginTop: 12, marginBottom: 4 },
   postRow: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#1a1a1a' },
-  postTitle: { color: '#fff', fontSize: 12, fontFamily: 'Iceland_400Regular' },
-  postExcerpt: { color: '#6b7280', fontSize: 11, fontFamily: 'Iceland_400Regular', marginTop: 3, lineHeight: 16 },
+  postTitle: { color: '#fff', fontSize: 15, fontFamily: 'Iceland_400Regular' },
+  postExcerpt: { color: '#6b7280', fontSize: 14, fontFamily: 'Iceland_400Regular', marginTop: 3, lineHeight: 16 },
 
   feedbackRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8 },
-  feedbackLabel: { color: '#4b5563', fontSize: 11, fontFamily: 'Iceland_400Regular' },
+  feedbackLabel: { color: '#4b5563', fontSize: 14, fontFamily: 'Iceland_400Regular' },
   fbBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: '#2a2a2a' },
   fbBtnText: { fontSize: 16 },
-  feedbackDone: { color: '#6b7280', fontSize: 11, fontFamily: 'Iceland_400Regular', marginTop: 12 },
+  feedbackDone: { color: '#6b7280', fontSize: 14, fontFamily: 'Iceland_400Regular', marginTop: 12 },
 });

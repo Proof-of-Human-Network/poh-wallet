@@ -380,24 +380,24 @@ const styles = StyleSheet.create({
   countdown: { color: '#f59e0b', fontSize: 24, fontFamily: 'Iceland_400Regular', marginTop: 4 },
 
   card: { backgroundColor: '#111', borderRadius: 10, padding: 16, marginHorizontal: 16, marginBottom: 12, borderWidth: 1, borderColor: '#1e1e1e' },
-  cardTitle: { color: '#aaa', fontSize: 11, fontFamily: 'Iceland_400Regular', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
+  cardTitle: { color: '#aaa', fontSize: 14, fontFamily: 'Iceland_400Regular', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
   bigPrice: { color: '#fff', fontSize: 22, fontFamily: 'Iceland_400Regular' },
   green: { color: '#22c55e' },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  meta: { color: '#666', fontSize: 12, fontFamily: 'Iceland_400Regular' },
+  meta: { color: '#666', fontSize: 15, fontFamily: 'Iceland_400Regular' },
   value: { color: '#ccc', fontSize: 13, fontFamily: 'Iceland_400Regular' },
-  badge: { fontSize: 11, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 },
+  badge: { fontSize: 14, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 },
   sellBadge: { backgroundColor: '#7f1d1d', color: '#fca5a5' },
 
   section: { marginHorizontal: 16, marginBottom: 16 },
-  sectionTitle: { color: '#aaa', fontSize: 11, fontFamily: 'Iceland_400Regular', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, marginHorizontal: 16 },
+  sectionTitle: { color: '#aaa', fontSize: 14, fontFamily: 'Iceland_400Regular', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, marginHorizontal: 16 },
   instrText: { color: '#bbb', fontSize: 13, fontFamily: 'Iceland_400Regular', marginBottom: 10 },
   quoteCalc: { color: '#22c55e', fontFamily: 'Iceland_400Regular', marginBottom: 10 },
 
   methodCard: { backgroundColor: '#0d0d0d', borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#1a1a1a' },
-  methodNetwork: { color: '#22c55e', fontSize: 12, fontFamily: 'Iceland_400Regular', marginBottom: 4 },
-  methodAddress: { color: '#e5e7eb', fontSize: 12, fontFamily: 'Iceland_400Regular' },
-  methodDetails: { color: '#666', fontSize: 11, fontFamily: 'Iceland_400Regular', marginTop: 4 },
+  methodNetwork: { color: '#22c55e', fontSize: 15, fontFamily: 'Iceland_400Regular', marginBottom: 4 },
+  methodAddress: { color: '#e5e7eb', fontSize: 15, fontFamily: 'Iceland_400Regular' },
+  methodDetails: { color: '#666', fontSize: 14, fontFamily: 'Iceland_400Regular', marginTop: 4 },
 
   infoBox: { marginHorizontal: 16, backgroundColor: '#0d0d0d', borderRadius: 8, padding: 14, borderWidth: 1, borderColor: '#1a1a1a' },
   infoText: { color: '#aaa', fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 20 },
@@ -413,5 +413,5 @@ const styles = StyleSheet.create({
     borderRadius: 8, color: '#fff', padding: 12,
     fontFamily: 'Iceland_400Regular', fontSize: 14, marginBottom: 8,
   },
-  tradeId: { color: '#333', fontSize: 10, textAlign: 'center', fontFamily: 'Iceland_400Regular', marginVertical: 16 },
+  tradeId: { color: '#333', fontSize: 13, textAlign: 'center', fontFamily: 'Iceland_400Regular', marginVertical: 16 },
 });

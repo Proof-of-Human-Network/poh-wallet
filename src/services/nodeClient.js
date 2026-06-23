@@ -8,7 +8,7 @@ const IPFS_GATEWAYS = [
   'https://ipfs.io/ipfs/',
   'https://cloudflare-ipfs.com/ipfs/',
 ];
-const BOOTNODE_URL = 'https://bootnode.proofofhuman.ge';
+const BOOTNODE_URL = 'https://miner.proofofhuman.ge';
 
 async function fetchIPFSJSON(cid) {
   for (const gw of IPFS_GATEWAYS) {
