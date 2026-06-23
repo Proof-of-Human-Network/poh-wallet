@@ -343,6 +343,18 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
     const map = { twitter: '𝕏', farcaster: '🟣', lens: '🌿', github: '🐙', discord: '💬', telegram: '📨' };
     return map[p?.toLowerCase()] || '🔗';
   }
+  function socialUrl(platform, identity) {
+    const id = identity?.replace(/^@/, '');
+    const p = platform?.toLowerCase();
+    if (p === 'twitter' || p === 'x') return `https://x.com/${id}`;
+    if (p === 'farcaster')             return `https://warpcast.com/${id}`;
+    if (p === 'lens')                  return `https://hey.xyz/u/${id}`;
+    if (p === 'github')                return `https://github.com/${id}`;
+    if (p === 'telegram')              return `https://t.me/${id}`;
+    if (p === 'discord')               return null;
+    if (identity?.startsWith('http'))  return identity;
+    return null;
+  }
   function renderBadge(b, label, okColor = '#22c55e') {
     if (!b) return null;
     const isBad = b.sanctioned || b.result === false;
@@ -484,9 +496,13 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
           <View style={styles.profileSection}>
             <Text style={styles.sectionSubTitle}>Profiles</Text>
             <View style={styles.socialsRow}>
-              {p.links.slice(0,8).map((l,i) => (
-                <Text key={i} style={styles.socialChip}>{platformIcon(l.platform)} {l.displayName || l.identity}</Text>
-              ))}
+              {p.links.slice(0,8).map((l,i) => {
+                const url = l.url || socialUrl(l.platform, l.identity);
+                const chip = <Text style={styles.socialChip}>{platformIcon(l.platform)} {l.displayName || l.identity}</Text>;
+                return url
+                  ? <TouchableOpacity key={i} onPress={() => Linking.openURL(url)}>{chip}</TouchableOpacity>
+                  : <View key={i}>{chip}</View>;
+              })}
             </View>
           </View>
         )}
@@ -629,9 +645,9 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
                 
                 {/* Upgrade info like frontend profile (display only; full paid upgrade on web with Solana) */}
                 <View style={{ marginTop: 8, padding: 8, backgroundColor: '#0f0f1a', borderRadius: 6, borderWidth: 1, borderColor: '#6366f1' }}>
-                  <Text style={{ color: '#a5b4fc', fontSize: 12, fontWeight: '600' }}>
+                  <Text style={{ color: '#a5b4fc', fontSize: 15, fontWeight: '600' }}>
                     Current Plan: <Text style={{ fontWeight: 'bold', color: '#fff' }}>{profileData.profile?.plan || 'free'}</Text>
-                    {profileData.profile?.plan === 'startup' && <Text style={{ color: '#22c55e', fontSize: 10 }}> (100k scans/mo)</Text>}
+                    {profileData.profile?.plan === 'startup' && <Text style={{ color: '#22c55e', fontSize: 13 }}> (100k scans/mo)</Text>}
                   </Text>
                   {(!profileData.profile?.plan || profileData.profile.plan === 'free') && (
                     <Text style={styles.hint} onPress={() => Linking.openURL('https://proofofhuman.ge')}>
@@ -794,49 +810,6 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
             </View>
           )}
 
-          {checkerResults && (
-            <View style={styles.resultsCard}>
-              <Text style={styles.evidenceHeader}>
-                Evidence • {passResults.length}/{checkerResults.length} passed
-              </Text>
-
-              {/* Pass */}
-              <TouchableOpacity style={styles.accordionHeader} onPress={() => setShowEvidencePass(!showEvidencePass)}>
-                <Text style={styles.accordionTitle}>✅ Pass ({passResults.length})</Text>
-                <Text style={styles.chevron}>{showEvidencePass ? '−' : '+'}</Text>
-              </TouchableOpacity>
-              {showEvidencePass && (
-                <View style={styles.resultsList}>
-                  {passResults.length === 0 && <Text style={styles.empty}>No signals passed</Text>}
-                  {passResults.map((res, i) => (
-                    <View key={i} style={styles.resultRow}>
-                      <Text style={styles.resultDotPass}>●</Text>
-                      <Text style={styles.resultDesc}>{res.description}</Text>
-                      <Text style={styles.badgePass}>PASS</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              {/* Fail */}
-              <TouchableOpacity style={styles.accordionHeader} onPress={() => setShowEvidenceFail(!showEvidenceFail)}>
-                <Text style={styles.accordionTitle}>❌ Fail ({failResults.length})</Text>
-                <Text style={styles.chevron}>{showEvidenceFail ? '−' : '+'}</Text>
-              </TouchableOpacity>
-              {showEvidenceFail && (
-                <View style={styles.resultsList}>
-                  {failResults.length === 0 && <Text style={styles.empty}>No signals failed</Text>}
-                  {failResults.map((res, i) => (
-                    <View key={i} style={styles.resultRow}>
-                      <Text style={styles.resultDotFail}>●</Text>
-                      <Text style={styles.resultDesc}>{res.description}</Text>
-                      <Text style={styles.badgeFail}>FAIL</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-          )}
         </View>
       )}
 
@@ -899,7 +872,7 @@ const styles = StyleSheet.create({
   sectionTitle: { color: '#22c55e', fontSize: 16, fontWeight: '600', marginBottom: 8, fontFamily: 'Iceland_400Regular' },
 
   scanHero: { marginBottom: 8 },
-  scanTag: { color: '#22c55e', fontSize: 11, letterSpacing: 2, marginBottom: 4 },
+  scanTag: { color: '#22c55e', fontSize: 14, letterSpacing: 2, marginBottom: 4 },
   scanTitle: { color: '#fff', fontSize: 22, fontWeight: '700', fontFamily: 'Iceland_400Regular' },
   scanSub: { color: '#888', fontSize: 13, marginTop: 4 },
 
@@ -913,12 +886,12 @@ const styles = StyleSheet.create({
   iconBtn: { padding: 8, marginLeft: 4 },
   iconText: { color: '#22c55e', fontSize: 18 },
 
-  resolved: { color: '#888', fontSize: 12, marginTop: 6, marginLeft: 4 },
+  resolved: { color: '#888', fontSize: 15, marginTop: 6, marginLeft: 4 },
   resolvePicker: { marginTop: 10, backgroundColor: '#0a0a0a', borderRadius: 8, padding: 8 },
-  resolveTitle: { color: '#888', fontSize: 12, marginBottom: 6 },
+  resolveTitle: { color: '#888', fontSize: 15, marginBottom: 6 },
   resolveHit: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#222' },
   resolveName: { color: '#fff', fontSize: 14 },
-  resolveSub: { color: '#666', fontSize: 11, fontFamily: 'monospace' },
+  resolveSub: { color: '#666', fontSize: 14, fontFamily: 'monospace' },
 
   submitBtn: { backgroundColor: '#22c55e', marginTop: 14, paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
   submitDisabled: { backgroundColor: '#113d1f' },
@@ -936,8 +909,8 @@ const styles = StyleSheet.create({
   resultDotPass: { color: '#22c55e', marginRight: 8 },
   resultDotFail: { color: '#ef4444', marginRight: 8 },
   resultDesc: { color: '#ddd', flex: 1, fontSize: 13 },
-  badgePass: { color: '#22c55e', fontSize: 11, fontWeight: '700' },
-  badgeFail: { color: '#ef4444', fontSize: 11, fontWeight: '700' },
+  badgePass: { color: '#22c55e', fontSize: 14, fontWeight: '700' },
+  badgeFail: { color: '#ef4444', fontSize: 14, fontWeight: '700' },
   empty: { color: '#666', fontStyle: 'italic', paddingVertical: 4 },
 
   brainCard: { backgroundColor: '#111', borderRadius: 12, padding: 14, marginTop: 10 },
@@ -949,41 +922,41 @@ const styles = StyleSheet.create({
   brainLabel: { color: '#888', fontSize: 13 },
   brainText: { color: '#aaa', marginTop: 6 },
   brainReason: { color: '#ddd', marginTop: 8, fontSize: 14 },
-  brainConf: { color: '#888', marginTop: 6, fontSize: 12 },
+  brainConf: { color: '#888', marginTop: 6, fontSize: 15 },
 
   // Vibe card
   vibeCard: { backgroundColor: '#050d05', borderWidth: 1, borderColor: 'rgba(34,197,94,0.2)', borderRadius: 12, padding: 14, marginTop: 10 },
   vibeHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' },
-  vibeLabel: { fontFamily: 'Iceland_400Regular', fontSize: 9, letterSpacing: 1.5, color: '#22c55e' },
-  vibeSourcePill: { fontFamily: 'Iceland_400Regular', fontSize: 9, color: '#374151', backgroundColor: '#111', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  vibeLabel: { fontFamily: 'Iceland_400Regular', fontSize: 15, letterSpacing: 1.5, color: '#22c55e' },
+  vibeSourcePill: { fontFamily: 'Iceland_400Regular', fontSize: 15, color: '#374151', backgroundColor: '#111', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
   vibeText: { fontFamily: 'Iceland_400Regular', fontSize: 13, color: '#9ca3af', lineHeight: 20, marginBottom: 10 },
   vibeTopics: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
-  vibeTopic: { fontFamily: 'Iceland_400Regular', fontSize: 10, color: '#22c55e', backgroundColor: 'rgba(34,197,94,0.08)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.2)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
-  vibeSignal: { fontFamily: 'Iceland_400Regular', fontSize: 11, color: '#4b5563', lineHeight: 18 },
+  vibeTopic: { fontFamily: 'Iceland_400Regular', fontSize: 13, color: '#22c55e', backgroundColor: 'rgba(34,197,94,0.08)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.2)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
+  vibeSignal: { fontFamily: 'Iceland_400Regular', fontSize: 14, color: '#4b5563', lineHeight: 18 },
   vibeCast: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: '#0a0a0a' },
-  vibeCastText: { flex: 1, fontFamily: 'Iceland_400Regular', fontSize: 11, color: '#6b7280', lineHeight: 15 },
-  vibeCastMeta: { fontFamily: 'Iceland_400Regular', fontSize: 9, color: '#374151', marginLeft: 8 },
+  vibeCastText: { flex: 1, fontFamily: 'Iceland_400Regular', fontSize: 14, color: '#6b7280', lineHeight: 15 },
+  vibeCastMeta: { fontFamily: 'Iceland_400Regular', fontSize: 15, color: '#374151', marginLeft: 8 },
   vibeArticle: { paddingVertical: 3 },
-  vibeArticleTitle: { fontFamily: 'Iceland_400Regular', fontSize: 11, color: '#9ca3af' },
-  vibeArticleSub: { fontFamily: 'Iceland_400Regular', fontSize: 10, color: '#4b5563' },
+  vibeArticleTitle: { fontFamily: 'Iceland_400Regular', fontSize: 14, color: '#9ca3af' },
+  vibeArticleSub: { fontFamily: 'Iceland_400Regular', fontSize: 13, color: '#4b5563' },
 
   // Social characteristic (inside renderFullProfile)
   charSection: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#1a1a1a' },
   charText: { fontFamily: 'Iceland_400Regular', fontSize: 13, color: '#9ca3af', lineHeight: 20, marginBottom: 10 },
   charTopics: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
-  charTopic: { fontFamily: 'Iceland_400Regular', fontSize: 10, color: '#22c55e', backgroundColor: 'rgba(34,197,94,0.08)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.2)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
-  charSignal: { fontFamily: 'Iceland_400Regular', fontSize: 11, color: '#4b5563', lineHeight: 18 },
+  charTopic: { fontFamily: 'Iceland_400Regular', fontSize: 13, color: '#22c55e', backgroundColor: 'rgba(34,197,94,0.08)', borderWidth: 1, borderColor: 'rgba(34,197,94,0.2)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
+  charSignal: { fontFamily: 'Iceland_400Regular', fontSize: 14, color: '#4b5563', lineHeight: 18 },
   charSource: { marginTop: 10, padding: 10, backgroundColor: '#0a0a0a', borderRadius: 8, borderWidth: 1, borderColor: '#1a1a1a' },
-  charSourceLabel: { fontFamily: 'Iceland_400Regular', fontSize: 11, color: '#6b7280', fontWeight: '600', marginBottom: 5, flexDirection: 'row', alignItems: 'center' },
-  charFollowMeta: { fontFamily: 'Iceland_400Regular', fontSize: 10, color: '#374151' },
-  charBio: { fontFamily: 'Iceland_400Regular', fontSize: 11, color: '#6b7280', fontStyle: 'italic', marginBottom: 6 },
+  charSourceLabel: { fontFamily: 'Iceland_400Regular', fontSize: 14, color: '#6b7280', fontWeight: '600', marginBottom: 5, flexDirection: 'row', alignItems: 'center' },
+  charFollowMeta: { fontFamily: 'Iceland_400Regular', fontSize: 13, color: '#374151' },
+  charBio: { fontFamily: 'Iceland_400Regular', fontSize: 14, color: '#6b7280', fontStyle: 'italic', marginBottom: 6 },
   charCast: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#111' },
-  charCastText: { flex: 1, fontFamily: 'Iceland_400Regular', fontSize: 11, color: '#6b7280', lineHeight: 15 },
-  charCastMeta: { fontFamily: 'Iceland_400Regular', fontSize: 9, color: '#374151', marginLeft: 6 },
+  charCastText: { flex: 1, fontFamily: 'Iceland_400Regular', fontSize: 14, color: '#6b7280', lineHeight: 15 },
+  charCastMeta: { fontFamily: 'Iceland_400Regular', fontSize: 15, color: '#374151', marginLeft: 6 },
   charArticle: { paddingVertical: 3 },
-  charArticleTitle: { fontFamily: 'Iceland_400Regular', fontSize: 11, color: '#9ca3af' },
-  charArticleSub: { fontFamily: 'Iceland_400Regular', fontSize: 10, color: '#4b5563' },
-  badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, fontSize: 11, fontWeight: '700' },
+  charArticleTitle: { fontFamily: 'Iceland_400Regular', fontSize: 14, color: '#9ca3af' },
+  charArticleSub: { fontFamily: 'Iceland_400Regular', fontSize: 13, color: '#4b5563' },
+  badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, fontSize: 14, fontWeight: '700' },
   badgeHuman: { backgroundColor: '#052e16', color: '#22c55e' },
   badgeUncertain: { backgroundColor: '#422006', color: '#eab308' },
   badgeBot: { backgroundColor: '#450a0a', color: '#ef4444' },
@@ -991,22 +964,22 @@ const styles = StyleSheet.create({
   profileCard: { backgroundColor: '#111', borderRadius: 12, padding: 14, marginTop: 8 },
   profileStat: { color: '#ddd', fontSize: 14, marginBottom: 4 },
   apiKeyRow: { marginTop: 10 },
-  apiKeyLabel: { color: '#888', fontSize: 12 },
+  apiKeyLabel: { color: '#888', fontSize: 15 },
   apiKey: { color: '#22c55e', fontFamily: 'monospace', fontSize: 13 },
   bold: { fontWeight: '600', color: '#fff' },
-  hint: { color: '#666', fontSize: 11, marginTop: 8 },
+  hint: { color: '#666', fontSize: 14, marginTop: 8 },
 
   profileCardTitle: { color: '#fff', fontWeight: '600', fontSize: 14 },
   profileCardCount: { color: '#22c55e', fontSize: 13 },
   miniBtn: { backgroundColor: '#222', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, marginLeft: 6 },
-  miniBtnText: { color: '#22c55e', fontSize: 11 },
+  miniBtnText: { color: '#22c55e', fontSize: 14 },
 
   mlistRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#222' },
   mlistMain: { flex: 1, marginRight: 8 },
-  mlistType: { color: '#6366f1', fontSize: 11, fontWeight: '600' },
+  mlistType: { color: '#6366f1', fontSize: 14, fontWeight: '600' },
   mlistDesc: { color: '#ddd', fontSize: 13 },
   mlistMeta: { alignItems: 'flex-end' },
-  mlistScore: { color: '#888', fontSize: 12 },
+  mlistScore: { color: '#888', fontSize: 15 },
 
   muted: { color: '#888' },
   errorText: { color: '#ef4444', marginTop: 8 },
@@ -1023,11 +996,11 @@ const styles = StyleSheet.create({
   avatarInitials: { color: '#22c55e', fontSize: 18, fontWeight: '700' },
   profileHeaderInfo: { flex: 1, justifyContent: 'center' },
   profileName: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  profileAddrSub: { color: '#888', fontSize: 12, fontFamily: 'monospace' },
-  profileBio: { color: '#aaa', fontSize: 12, marginTop: 2 },
+  profileAddrSub: { color: '#888', fontSize: 15, fontFamily: 'monospace' },
+  profileBio: { color: '#aaa', fontSize: 15, marginTop: 2 },
   profileBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
   badgeSmall: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#333' },
-  badgeSmallText: { fontSize: 10, color: '#fff' },
+  badgeSmallText: { fontSize: 13, color: '#fff' },
   badgeOk: { backgroundColor: '#052e16', borderColor: '#22c55e' },
   badgeWarn: { backgroundColor: '#422006', borderColor: '#eab308' },
   badgeDanger: { backgroundColor: '#450a0a', borderColor: '#ef4444' },
@@ -1039,29 +1012,29 @@ const styles = StyleSheet.create({
   idWarn: { borderColor: '#eab308', borderWidth: 1 },
   idIcon: { fontSize: 14, marginRight: 4 },
   idBody: { flex: 1 },
-  idName: { color: '#fff', fontSize: 11, fontWeight: '600' },
-  idStatus: { color: '#888', fontSize: 9 },
-  idCheck: { color: '#22c55e', fontSize: 12 },
+  idName: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  idStatus: { color: '#888', fontSize: 15 },
+  idCheck: { color: '#22c55e', fontSize: 15 },
   scoreBar: { height: 3, backgroundColor: '#333', marginTop: 2, borderRadius: 1 },
   scoreFill: { height: 3, backgroundColor: '#22c55e', borderRadius: 1 },
   profileSection: { marginTop: 6 },
-  sectionSubTitle: { color: '#22c55e', fontSize: 12, fontWeight: '600', marginBottom: 4 },
+  sectionSubTitle: { color: '#22c55e', fontSize: 15, fontWeight: '600', marginBottom: 4 },
   domainsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
-  domainChip: { backgroundColor: '#1a1a1a', color: '#aaa', fontSize: 10, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 3 },
+  domainChip: { backgroundColor: '#1a1a1a', color: '#aaa', fontSize: 13, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 3 },
   socialsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
-  socialChip: { backgroundColor: '#1a1a1a', color: '#aaa', fontSize: 10, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 3 },
+  socialChip: { backgroundColor: '#1a1a1a', color: '#aaa', fontSize: 13, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 3 },
   ccGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
-  ccChip: { backgroundColor: '#1a1a1a', color: '#aaa', fontSize: 10, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 3 },
+  ccChip: { backgroundColor: '#1a1a1a', color: '#aaa', fontSize: 13, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 3 },
   graphList: { maxHeight: 32 },
   graphNode: { backgroundColor: '#222', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 4, marginRight: 4 },
-  graphNodeText: { color: '#22c55e', fontSize: 10, fontFamily: 'monospace' },
-  graphHint: { color: '#666', fontSize: 9, fontStyle: 'italic', marginTop: 2 },
+  graphNodeText: { color: '#22c55e', fontSize: 13, fontFamily: 'monospace' },
+  graphHint: { color: '#666', fontSize: 15, fontStyle: 'italic', marginTop: 2 },
   evidenceDots: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 3 },
   evDot: { width: 8, height: 8, borderRadius: 4 },
   evPass: { backgroundColor: '#22c55e' },
   evFail: { backgroundColor: '#ef4444' },
   evBlacklist: { backgroundColor: '#f59e0b' },
-  evCount: { color: '#888', fontSize: 10, marginLeft: 6 },
+  evCount: { color: '#888', fontSize: 13, marginLeft: 6 },
 
   // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', padding: 20 },
