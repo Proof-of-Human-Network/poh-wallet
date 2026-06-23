@@ -32,7 +32,6 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
   // --- Scan state ---
   const [scanInput, setScanInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isResolving, setIsResolving] = useState(false);
   const [checkerResults, setCheckerResults] = useState(null);
   const [brainVerdict, setBrainVerdict] = useState(null);
   const [brainPolling, setBrainPolling] = useState(false);
@@ -54,7 +53,6 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
   const [profileData, setProfileData] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState(null);
-  const [rotatingKey, setRotatingKey] = useState(false);
 
   // --- Wallet switcher modal (simple picker) ---
   const [walletModalVisible, setWalletModalVisible] = useState(false);
@@ -121,35 +119,9 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
     // profile will auto reload via useEffect
   }
 
-  // Resolve name/handle to address (best effort)
-  async function resolveToAddress(q) {
-    if (!q) return q;
-    const trimmed = q.trim();
-    // quick heuristic: looks like address already
-    if (trimmed.startsWith('poh') || trimmed.startsWith('0x') || trimmed.length > 30) {
-      return trimmed;
-    }
-    try {
-      const res = await callApi(`/checker/resolve?q=${encodeURIComponent(trimmed)}`);
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 1) {
-        setResolveResults(data);
-        setResolvedDisplay('');
-        return trimmed; // let user pick
-      }
-      if (Array.isArray(data) && data.length === 1) {
-        const hit = data[0];
-        setResolvedDisplay(hit.address);
-        return hit.address;
-      }
-      if (data && data.address) {
-        setResolvedDisplay(data.address);
-        return data.address;
-      }
-    } catch (e) {
-      console.warn('resolve failed', e);
-    }
-    return trimmed;
+  // Pass input directly — node auto-detects chain from address format
+  function resolveToAddress(q) {
+    return Promise.resolve((q || '').trim());
   }
 
   // Poll brain verdict if we got a brainKey
@@ -189,9 +161,13 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
     }, 3 * 60 * 1000);
   }
 
-  // Main scan action (mimics run-check in frontend)
+  // Main scan — submits verdict job to the node's job system, polls for result
   async function runCheck() {
-    if ((!scanInput && resolveResults.length === 0) && !scanInput.trim()) return;
+    const inputToUse = resolveResults.length > 0
+      ? (resolveResults[0].address || scanInput.trim())
+      : scanInput.trim();
+    if (!inputToUse) return;
+
     setLoading(true);
     setError(null);
     setCheckerResults(null);
@@ -203,82 +179,69 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
     setUkResult(null);
     setScanProfile(null);
     setVibeData(null);
-    // if we had resolve picker, use first or cleared
-    let inputToUse = scanInput.trim();
-    if (resolveResults.length > 0) {
-      // if user didn't pick, use first
-      inputToUse = resolveResults[0].address || inputToUse;
-    }
+    setResolveResults([]);
 
     try {
-      setIsResolving(true);
-      const resolved = await resolveToAddress(inputToUse);
-      setIsResolving(false);
-
-      // Build form
-      const form = new FormData();
-      form.append('input', resolved);
-
-      // Optionally send walletAddress for better limits / profile link (use connected if avail)
-      if (connectedAddr) {
-        form.append('walletAddress', connectedAddr);
-      }
-
-      const res = await callApi(`/checker`, {
+      // Submit verdict job
+      const jobRes = await callApi('/job', {
         method: 'POST',
-        body: form,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'verdict',
+          payload: { address: inputToUse },
+          ...(connectedAddr ? { requesterAddress: connectedAddr } : {}),
+        }),
       });
-      const json = await res.json();
+      const jobJson = await jobRes.json();
+      if (!jobRes.ok) throw new Error(jobJson.error || 'Scan failed');
 
-      if (!res.ok) {
-        throw new Error(json.error || 'Scan failed');
+      const jobId = jobJson.jobId || jobJson.id;
+      if (!jobId) throw new Error('No job ID returned from node');
+
+      // Poll status
+      const deadline = Date.now() + 120_000;
+      while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 3000));
+        const sRes = await callApi(`/job/${jobId}/status`);
+        const st = await sRes.json();
+        if (st.status === 'error') throw new Error(st.error || 'Job failed');
+        if (st.status === 'done') break;
       }
 
-      if (json.jobId) {
-        // Batch/job style - poll job (simplified, show progress note)
-        setCheckerResults(null);
-        Alert.alert('Batch started', `Job ${json.jobId}. Polling for results (this demo shows first results when ready).`);
-        // For simplicity in v1 we don't fully poll jobs here; user can re-run single
-        setLoading(false);
-        return;
+      // Fetch result
+      const rRes = await callApi(`/job/${jobId}/result`);
+      const rData = await rRes.json();
+
+      setCheckerResults(rData.result || rData.results || null);
+      if (rData.ofac) setOfacResult(rData.ofac);
+      if (rData.eu)   setEuResult(rData.eu);
+      if (rData.uk)   setUkResult(rData.uk);
+
+      const v = rData.verdict || rData.profile?.verdict;
+      if (v) {
+        const src = rData.verdict ? rData : (rData.profile || {});
+        setBrainVerdict({ status: 'done', verdict: src.verdict, confidence: src.confidence, reasoning: src.reasoning });
+        if (rData.vibeData) setVibeData({ ...rData.vibeData, farcasterData: rData.farcasterData || null, paragraphData: rData.paragraphData || null });
+      } else if (rData.brainKey) {
+        pollBrain(rData.brainKey, inputToUse);
       }
 
-      // Direct result
-      setCheckerResults(json.result || json.results || null);
-      if (json.ofac) setOfacResult(json.ofac);
-      if (json.eu) setEuResult(json.eu);
-      if (json.uk) setUkResult(json.uk);
-      if (json.verdict) {
-        setBrainVerdict({
-          status: 'done',
-          verdict: json.verdict,
-          confidence: json.confidence,
-          reasoning: json.reasoning,
-        });
-      } else if (json.brainKey) {
-        pollBrain(json.brainKey, resolved || inputToUse);
-      }
-
-      // Auto load full rich profile for the scanned addr (for full profile view with avatar, badges, graph)
-      const scannedAddr = resolved || (json.result && json.result[0] && json.result[0].address) || inputToUse;
-      if (scannedAddr) {
-        loadScanProfile(scannedAddr);
-      }
+      // Load rich profile from cached node data
+      loadScanProfile(inputToUse);
     } catch (e) {
       setError(e.message || 'Scan failed. Check network or try again.');
     } finally {
       setLoading(false);
-      setResolveResults([]); // clear picker after use
     }
   }
 
-  // Load rich scan profile (avatar, badges, crosschain, graph, identity etc from /checker/profile)
+  // Load rich scan profile from node's cached job result
   async function loadScanProfile(addr) {
     if (!addr) return;
     setScanProfileLoading(true);
     try {
-      const r = await callApi(`/checker/profile/${encodeURIComponent(addr)}`);
-      if (!r.ok) throw new Error('profile fetch failed');
+      const r = await callApi(`/profile/${encodeURIComponent(addr)}`);
+      if (!r.ok) return; // no cached profile yet — not an error
       const data = await r.json();
       setScanProfile(data);
     } catch (e) {
@@ -310,27 +273,7 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
     }
   }
 
-  async function rotateApiKey() {
-    if (!connectedAddr) return;
-    setRotatingKey(true);
-    try {
-      const res = await callApi(`/profile/apikey/rotate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: connectedAddr }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Rotate failed');
-      }
-      await loadProfile(connectedAddr);
-      Alert.alert('API Key Rotated', 'A new API key has been generated for this address.');
-    } catch (e) {
-      Alert.alert('Rotate Failed', e.message || 'Could not rotate the API key.');
-    } finally {
-      setRotatingKey(false);
-    }
-  }
+  // API key management is on proofofhuman.ge web — not available on node directly
 
   // Pick from resolve results
   function pickResolve(hit) {
@@ -645,11 +588,8 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
 
             {profileData === null && !profileLoading && (
               <View style={styles.profileCard}>
-                <Text style={styles.muted}>No profile found for this PoH address.</Text>
-                <Text style={styles.hint}>You can still use the scanner with your PoH wallet (uses free quota). Create a profile here to get an API key for easier use.</Text>
-                <TouchableOpacity style={styles.submitBtn} onPress={rotateApiKey} disabled={rotatingKey}>
-                  <Text style={styles.submitText}>{rotatingKey ? 'Creating...' : 'Create Profile / Get API Key'}</Text>
-                </TouchableOpacity>
+                <Text style={styles.muted}>No profile cached for this address yet.</Text>
+                <Text style={styles.hint}>Run a scan on your address to generate a profile, or visit proofofhuman.ge to create an account and get an API key.</Text>
               </View>
             )}
 
@@ -734,10 +674,10 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
             onPress={runCheck}
             disabled={loading || (!scanInput && resolveResults.length === 0)}
           >
-            {loading || isResolving ? (
+            {loading ? (
               <ActivityIndicator color="#000" />
             ) : (
-              <Text style={styles.submitText}>{isResolving ? 'Resolving…' : 'Scan'}</Text>
+              <Text style={styles.submitText}>Scan</Text>
             )}
           </TouchableOpacity>
           {error ? <Text style={styles.errorText}>{error}</Text> : null}

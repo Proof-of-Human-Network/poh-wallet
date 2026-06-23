@@ -1,21 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, ScrollView, Modal,
+  View, Text, TextInput, TouchableOpacity, ScrollView,
   ActivityIndicator, StyleSheet, Alert, PanResponder,
-  Animated, Easing, NativeModules, KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { Video, ResizeMode } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
-
-const SPHERE_VIDEO = require('../../assets/sphere.mp4');
-
-// Only use Voice if the native module is actually linked in the current build
-let Voice = null;
-try {
-  if (NativeModules.RCTVoice) {
-    Voice = require('@react-native-voice/voice').default;
-  }
-} catch { /* not linked yet */ }
 
 // ── Log budget slider ──────────────────────────────────────────────────────────
 const LOG_MIN = 0.01, LOG_MAX = 200, LOG_STEPS = 200;
@@ -63,43 +52,64 @@ function LogSlider({ value, onChange, disabled }) {
   );
 }
 
-// ── Sphere video — fills parent absolutely ────────────────────────────────────
-function SphereVideo() {
-  return (
-    <Video
-      source={SPHERE_VIDEO}
-      style={{ width: '200%', height: '70%', top: '-20px', left: '-250px', position: 'absolute' }}
-      resizeMode={ResizeMode.COVER}
-      shouldPlay
-      isLooping
-      isMuted
-    />
-  );
+// ── Markdown renderer ──────────────────────────────────────────────────────────
+function parseInline(text) {
+  if (!text.includes('**') && !text.includes('*') && !text.includes('`')) return text;
+  const parts = [];
+  const re = /(\*\*[^*\n]+\*\*|\*[^*\n]+\*|`[^`\n]+`)/g;
+  let last = 0, k = 0, m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(<Text key={k++}>{text.slice(last, m.index)}</Text>);
+    const raw = m[0];
+    if (raw.startsWith('**'))
+      parts.push(<Text key={k++} style={{ fontWeight: '700', color: '#fff' }}>{raw.slice(2, -2)}</Text>);
+    else if (raw.startsWith('*'))
+      parts.push(<Text key={k++} style={{ fontStyle: 'italic', color: '#d1d5db' }}>{raw.slice(1, -1)}</Text>);
+    else
+      parts.push(<Text key={k++} style={s.inlineCode}>{raw.slice(1, -1)}</Text>);
+    last = m.index + raw.length;
+  }
+  if (last < text.length) parts.push(<Text key={k++}>{text.slice(last)}</Text>);
+  return parts;
 }
 
-// ── Countdown digit animation ──────────────────────────────────────────────────
-function CountdownDigit({ digit }) {
-  const scale = useRef(new Animated.Value(1.6)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    scale.setValue(1.6);
-    opacity.setValue(0);
-    Animated.parallel([
-      Animated.timing(scale,   { toValue: 1, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 1, duration: 120, useNativeDriver: true }),
-        Animated.delay(500),
-        Animated.timing(opacity, { toValue: 0, duration: 180, useNativeDriver: true }),
-      ]),
-    ]).start();
-  }, [digit]);
-
-  return (
-    <Animated.Text style={[s.countdownDigit, { transform: [{ scale }], opacity }]}>
-      {digit}
-    </Animated.Text>
-  );
+function renderMarkdown(text) {
+  if (!text || typeof text !== 'string') return null;
+  const lines = text.split('\n');
+  const elements = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    let m;
+    if (line.startsWith('```')) {
+      const code = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith('```')) { code.push(lines[i]); i++; }
+      elements.push(
+        <View key={i} style={s.codeBlock}>
+          <Text style={s.codeText}>{code.join('\n')}</Text>
+        </View>
+      );
+    } else if ((m = line.match(/^### (.+)/))) {
+      elements.push(<Text key={i} style={s.mdH3}>{m[1]}</Text>);
+    } else if ((m = line.match(/^## (.+)/))) {
+      elements.push(<Text key={i} style={s.mdH2}>{m[1]}</Text>);
+    } else if ((m = line.match(/^# (.+)/))) {
+      elements.push(<Text key={i} style={s.mdH1}>{m[1]}</Text>);
+    } else if ((m = line.match(/^[-*] (.+)/))) {
+      elements.push(<Text key={i} style={s.mdBullet}><Text>{'•  '}</Text>{parseInline(m[1])}</Text>);
+    } else if ((m = line.match(/^(\d+)\. (.+)/))) {
+      elements.push(<Text key={i} style={s.mdBullet}><Text>{m[1]+'.  '}</Text>{parseInline(m[2])}</Text>);
+    } else if (line.match(/^---+$/)) {
+      elements.push(<View key={i} style={s.mdRule} />);
+    } else if (line.trim() === '') {
+      if (i > 0 && lines[i - 1].trim() !== '') elements.push(<View key={i} style={{ height: 8 }} />);
+    } else {
+      elements.push(<Text key={i} style={s.resultText}>{parseInline(line)}</Text>);
+    }
+    i++;
+  }
+  return <>{elements}</>;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -115,87 +125,7 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
   const [result,     setResult]     = useState(null);
   const [error,      setError]      = useState(null);
 
-  // Voice state
-  const [voicePhase,  setVoicePhase]  = useState(null); // null | 'countdown' | 'listening'
-  const [countdown,   setCountdown]   = useState(3);
-  const [transcript,  setTranscript]  = useState('');
-  const countdownRef = useRef(null);
-
   const balance = selectedAddress ? (balances?.[selectedAddress] ?? 0) : 0;
-
-  // ── Voice init / cleanup ──────────────────────────────────────────────────
-  useEffect(() => {
-    if (!Voice) return;
-    Voice.onSpeechResults = (e) => {
-      const text = e.value?.[0] || '';
-      setTranscript(text);
-    };
-    Voice.onSpeechPartialResults = (e) => {
-      const text = e.value?.[0] || '';
-      setTranscript(text);
-    };
-    Voice.onSpeechError = (e) => {
-      console.log('[Voice] error', e);
-      cancelVoice();
-    };
-    return () => {
-      Voice.destroy().catch(() => {});
-    };
-  }, []);
-
-  const startCountdown = () => {
-    setVoicePhase('countdown');
-    setCountdown(3);
-    setTranscript('');
-    let n = 3;
-    const tick = () => {
-      n -= 1;
-      if (n > 0) {
-        setCountdown(n);
-        countdownRef.current = setTimeout(tick, 1000);
-      } else {
-        beginListening();
-      }
-    };
-    countdownRef.current = setTimeout(tick, 1000);
-  };
-
-  const beginListening = async () => {
-    setVoicePhase('listening');
-    if (Voice) {
-      try {
-        await Voice.start('en-US');
-      } catch (e) {
-        console.log('[Voice] start error', e);
-        setVoicePhase(null);
-        Alert.alert('Voice unavailable', 'Rebuild the app to enable voice input (expo run:android).');
-      }
-    }
-  };
-
-  const cancelVoice = () => {
-    clearTimeout(countdownRef.current);
-    if (Voice) Voice.stop().catch(() => {});
-    setVoicePhase(null);
-    setTranscript('');
-  };
-
-  const onSphereTap = () => {
-    if (voicePhase === null) {
-      startCountdown();
-    } else if (voicePhase === 'listening') {
-      // Stop recording and use transcript
-      if (Voice) Voice.stop().catch(() => {});
-      const finalText = transcript.trim();
-      setVoicePhase(null);
-      setTranscript('');
-      if (finalText) {
-        setMessage(finalText);
-        // Auto-submit after a short delay so message state settles
-        setTimeout(() => submitText(finalText), 80);
-      }
-    }
-  };
 
   // ── Node fetch ────────────────────────────────────────────────────────────
   async function askNode(q) {
@@ -227,7 +157,7 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
     throw new Error(lastErr || 'All nodes unreachable for chat');
   }
 
-  // ── Submit (accepts explicit text to handle voice path) ───────────────────
+  // ── Submit ────────────────────────────────────────────────────────────────
   const submitText = async (q) => {
     if (!q) return;
     if (!activeNodeUrl) { setError('No node connected. Check Settings.'); return; }
@@ -241,8 +171,7 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
       const { data: askData, base } = await askNode(q);
 
       if (askData.type === 'chat') {
-        const msg = askData.message || askData.reply || '(no response)';
-        setResult({ type: 'chat', message: msg });
+        setResult({ type: 'chat', message: askData.message || askData.reply || '(no response)' });
         setStatusText('');
         return;
       }
@@ -251,7 +180,7 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
       const maxBudget = Math.round(budget * 1_000_000_000);
       if (!(maxBudget > 0)) {
         setLoading(false);
-        Alert.alert('Fee Required', 'This question needs a real-time data skill. Set a fee using the slider and try again.', [{ text: 'OK' }]);
+        Alert.alert('Fee Required', 'This question needs a real-time data skill. Set a fee using the slider and try again.');
         return;
       }
       if (!selectedAddress) { setError('Select a wallet to pay the skill fee.'); return; }
@@ -325,176 +254,133 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
 
   const renderSkillOutput = (output) => {
     if (output == null) return null;
-    if (typeof output === 'string') return <Text style={s.resultText}>{output}</Text>;
+    if (typeof output === 'string') return renderMarkdown(output);
     if (output.analysis?.summary) {
       return (
         <>
-          <Text style={s.resultSection}>SUMMARY</Text>
-          <Text style={s.resultText}>{output.analysis.summary}</Text>
+          <Text style={s.mdH3}>Summary</Text>
+          {renderMarkdown(output.analysis.summary)}
           {output.analysis.keyTopics?.length > 0 && (
             <>
-              <Text style={s.resultSection}>KEY TOPICS</Text>
+              <Text style={s.mdH3}>Key Topics</Text>
               <Text style={s.resultText}>{output.analysis.keyTopics.join(', ')}</Text>
             </>
           )}
           {Array.isArray(output.posts) && output.posts.slice(0, 5).map((p, i) => (
             <View key={i} style={s.postRow}>
               <Text style={s.postTitle}>{p.title || '(untitled)'}</Text>
-              {p.excerpt ? <Text style={s.postExcerpt}>{p.excerpt}</Text> : null}
+              {p.excerpt ? renderMarkdown(p.excerpt) : null}
             </View>
           ))}
         </>
       );
     }
-    return <Text style={s.resultJson}>{JSON.stringify(output, null, 2)}</Text>;
+    return <Text style={s.codeText}>{JSON.stringify(output, null, 2)}</Text>;
   };
 
   const isSkillResult = result?.type === 'skill';
 
+  const responseText = result?.type === 'chat'
+    ? result.message
+    : result?.nlResponse || null;
+
   return (
-    <>
-      {/* ── Voice modal ────────────────────────────────────────────────────── */}
-      <Modal
-        visible={voicePhase !== null}
-        transparent={false}
-        animationType="fade"
-        statusBarTranslucent
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: '#000' }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        style={{ flex: 1 }}
+        contentContainerStyle={s.content}
       >
-        <View style={{ flex: 1, backgroundColor: '#000' }}>
-          <SphereVideo />
-          {voicePhase === 'countdown' ? (
-            <View style={s.voiceOverlay}>
-              <Text style={s.voiceTitle}>Start speaking in</Text>
-              <CountdownDigit digit={countdown} />
+        <TextInput
+          style={s.input}
+          placeholder="Ask the network anything…"
+          placeholderTextColor="#4b5563"
+          value={message}
+          onChangeText={setMessage}
+          multiline
+          numberOfLines={3}
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!loading}
+        />
+
+        <View style={s.feeRow}>
+          <Text style={s.label}>MAX FEE <Text style={s.labelNote}>(data skills only)</Text></Text>
+          <Text style={s.feeValue}>{budget <= 0 ? 'no fee' : `${_fmtPoh(budget)} POH`}</Text>
+        </View>
+        <LogSlider value={budget} onChange={setBudget} disabled={loading} />
+        <Text style={s.feeNote}>
+          Balance: {balance.toFixed(2)} POH · fee only charged when a data skill is used
+        </Text>
+
+        {error ? (
+          <View style={s.errorBox}><Text style={s.errorText}>{error}</Text></View>
+        ) : null}
+
+        <TouchableOpacity
+          style={[s.submitBtn, (loading || !message.trim()) && s.submitBtnDisabled]}
+          onPress={submit}
+          disabled={loading || !message.trim()}
+        >
+          {loading ? (
+            <View style={s.submitRow}>
+              <ActivityIndicator color="#000" size="small" />
+              <Text style={[s.submitBtnText, { marginLeft: 8 }]}>{statusText || 'Thinking...'}</Text>
             </View>
           ) : (
-            <TouchableOpacity style={s.voiceOverlay} onPress={onSphereTap} activeOpacity={0.9}>
-              <Text style={s.voiceListening}>Listening…</Text>
-              {transcript ? (
-                <Text style={s.voiceTranscript} numberOfLines={4}>{transcript}</Text>
-              ) : null}
-              <Text style={s.voiceHint}>Tap to send</Text>
-            </TouchableOpacity>
+            <Text style={s.submitBtnText}>Ask</Text>
           )}
-          <TouchableOpacity style={s.voiceCancel} onPress={cancelVoice}>
-            <Text style={s.voiceCancelText}>Cancel</Text>
-          </TouchableOpacity>
-        </View>
-      </Modal>
-
-      {/* ── Main screen: video fills screen, controls float at bottom ──────── */}
-      <View style={s.root}>
-        {/* Fullscreen looping video */}
-        <SphereVideo />
-
-        {/* Tappable upper area */}
-        <TouchableOpacity style={s.videoTap} onPress={onSphereTap} activeOpacity={0.85}>
-          <Text style={s.sphereHint}>{Voice ? 'Tap to speak' : ''}</Text>
         </TouchableOpacity>
 
-        {/* Bottom panel overlay */}
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.panel}>
-          <ScrollView keyboardShouldPersistTaps="handled" style={{ backgroundColor: '#000' }} contentContainerStyle={s.panelContent}>
-            <TextInput
-              style={s.input}
-              placeholder={"Ask the network anything…"}
-              placeholderTextColor="#4b5563"
-              value={message}
-              onChangeText={setMessage}
-              multiline
-              numberOfLines={3}
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!loading}
-            />
-
-            <View style={s.feeRow}>
-              <Text style={s.label}>MAX FEE <Text style={s.labelNote}>(data skills only)</Text></Text>
-              <Text style={s.feeValue}>{budget <= 0 ? 'no fee' : `${_fmtPoh(budget)} POH`}</Text>
+        {result ? (
+          <View style={s.resultBox}>
+            <View style={s.resultHeaderRow}>
+              <Text style={s.resultHeader}>
+                {isSkillResult
+                  ? `${result.skillId}${result.tokensUsed ? `  ·  ${result.tokensUsed} tokens` : ''}`
+                  : 'AI'}
+              </Text>
+              <TouchableOpacity style={s.copyBtn} onPress={copyResponse}>
+                <Text style={s.copyBtnText}>⎘ Copy</Text>
+              </TouchableOpacity>
             </View>
-            <LogSlider value={budget} onChange={setBudget} disabled={loading} />
-            <Text style={s.feeNote}>
-              Balance: {balance.toFixed(2)} POH · fee only deducted when a data skill is used
-            </Text>
 
-            {error ? (
-              <View style={s.errorBox}><Text style={s.errorText}>{error}</Text></View>
-            ) : null}
+            <ScrollView nestedScrollEnabled style={s.resultScroll}>
+              {responseText
+                ? renderMarkdown(responseText)
+                : renderSkillOutput(result.output)
+              }
+            </ScrollView>
 
-            <TouchableOpacity
-              style={[s.submitBtn, (loading || !message.trim()) && s.submitBtnDisabled]}
-              onPress={submit}
-              disabled={loading || !message.trim()}
-            >
-              {loading ? (
-                <View style={s.submitRow}>
-                  <ActivityIndicator color="#000" size="small" />
-                  <Text style={[s.submitBtnText, { marginLeft: 8 }]}>{statusText || 'Thinking...'}</Text>
-                </View>
+            {isSkillResult && (
+              result.feedback ? (
+                <Text style={s.feedbackDone}>
+                  {result.feedback === 'positive' ? '👍 Thanks for your feedback!' : '👎 Noted — miner penalised'}
+                </Text>
               ) : (
-                <Text style={s.submitBtnText}>Ask</Text>
-              )}
-            </TouchableOpacity>
-
-            {result ? (
-              <View style={s.resultBox}>
-                <View style={s.resultHeaderRow}>
-                  <Text style={s.resultHeader}>
-                    {isSkillResult
-                      ? `${result.skillId}${result.tokensUsed ? `  ·  ${result.tokensUsed} tokens` : ''}`
-                      : 'AI'}
-                  </Text>
-                  <TouchableOpacity style={s.copyBtn} onPress={copyResponse}>
-                    <Text style={s.copyBtnText}>⎘ Copy</Text>
+                <View style={s.feedbackRow}>
+                  <Text style={s.feedbackLabel}>Helpful?</Text>
+                  <TouchableOpacity style={s.fbBtn} onPress={() => sendFeedback('positive')}>
+                    <Text style={s.fbBtnText}>👍</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={s.fbBtn} onPress={() => sendFeedback('negative')}>
+                    <Text style={s.fbBtnText}>👎</Text>
                   </TouchableOpacity>
                 </View>
-                <ScrollView nestedScrollEnabled style={s.resultScroll}>
-                  {result.type === 'chat'
-                    ? <Text style={s.resultText}>{result.message}</Text>
-                    : result.nlResponse
-                      ? <Text style={s.resultText}>{result.nlResponse}</Text>
-                      : renderSkillOutput(result.output)
-                  }
-                </ScrollView>
-                {isSkillResult && (
-                  result.feedback ? (
-                    <Text style={s.feedbackDone}>
-                      {result.feedback === 'positive' ? '👍 Thanks for your feedback!' : '👎 Noted — miner penalised'}
-                    </Text>
-                  ) : (
-                    <View style={s.feedbackRow}>
-                      <Text style={s.feedbackLabel}>Helpful?</Text>
-                      <TouchableOpacity style={s.fbBtn} onPress={() => sendFeedback('positive')}>
-                        <Text style={s.fbBtnText}>👍</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={s.fbBtn} onPress={() => sendFeedback('negative')}>
-                        <Text style={s.fbBtnText}>👎</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )
-                )}
-              </View>
-            ) : null}
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </View>
-    </>
+              )
+            )}
+          </View>
+        ) : null}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const s = StyleSheet.create({
-  // Root: video fills screen, children stack on top
-  root:     { flex: 1, backgroundColor: '#000' },
-  videoTap: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 12 },
-  sphereHint: { color: 'rgba(255,255,255,0.35)', fontSize: 12, fontFamily: 'Iceland_400Regular', letterSpacing: 1 },
-
-  // Bottom control panel
-  panel: { maxHeight: '55%', backgroundColor: '#000' },
-  panelContent: {
-    backgroundColor: 'rgba(0,0,0,0.88)',
-    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 20,
-    borderTopWidth: 1, borderTopColor: '#1a1a1a',
-  },
+  content: { padding: 16, paddingBottom: 40 },
 
   label:     { color: '#4b5563', fontSize: 13, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular' },
   labelNote: { color: '#374151', letterSpacing: 0, textTransform: 'none' },
@@ -522,49 +408,25 @@ const s = StyleSheet.create({
   resultHeader:    { color: '#22c55e', fontSize: 13, fontFamily: 'Iceland_400Regular', letterSpacing: 1, flex: 1 },
   copyBtn:         { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4, borderWidth: 1, borderColor: '#2a2a2a' },
   copyBtnText:     { color: '#6b7280', fontSize: 14, fontFamily: 'Iceland_400Regular' },
-  resultScroll:    { maxHeight: 280 },
-  resultText:      { color: '#e5e7eb', fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 20 },
-  resultJson:      { color: '#9ca3af', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 16 },
-  resultSection:   { color: '#4b5563', fontSize: 15, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular', marginTop: 12, marginBottom: 4 },
-  postRow:         { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#1a1a1a' },
-  postTitle:       { color: '#fff', fontSize: 15, fontFamily: 'Iceland_400Regular' },
-  postExcerpt:     { color: '#6b7280', fontSize: 14, fontFamily: 'Iceland_400Regular', marginTop: 3, lineHeight: 16 },
-  feedbackRow:     { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8 },
-  feedbackLabel:   { color: '#4b5563', fontSize: 14, fontFamily: 'Iceland_400Regular' },
-  fbBtn:           { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: '#2a2a2a' },
-  fbBtnText:       { fontSize: 16 },
-  feedbackDone:    { color: '#6b7280', fontSize: 14, fontFamily: 'Iceland_400Regular', marginTop: 12 },
+  resultScroll:    { maxHeight: 400 },
 
-  // Voice modal overlay (on top of fullscreen video)
-  voiceOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: 32,
-  },
-  voiceTitle: {
-    color: '#fff', fontSize: 22, fontFamily: 'Iceland_400Regular',
-    letterSpacing: 2, marginBottom: 20,
-  },
-  countdownDigit: {
-    color: '#22c55e', fontSize: 130, fontFamily: 'Iceland_400Regular',
-    lineHeight: 140,
-  },
-  voiceListening: {
-    color: '#fff', fontSize: 18, fontFamily: 'Iceland_400Regular',
-    letterSpacing: 2,
-  },
-  voiceTranscript: {
-    color: '#9ca3af', fontSize: 15, fontFamily: 'Iceland_400Regular',
-    textAlign: 'center', marginTop: 16, lineHeight: 22,
-  },
-  voiceHint: {
-    color: 'rgba(255,255,255,0.35)', fontSize: 13, fontFamily: 'Iceland_400Regular',
-    letterSpacing: 1, marginTop: 12,
-  },
-  voiceCancel: {
-    position: 'absolute', bottom: 60, alignSelf: 'center',
-    paddingHorizontal: 24, paddingVertical: 12,
-    borderRadius: 24, borderWidth: 1, borderColor: '#333',
-  },
-  voiceCancelText: { color: '#9ca3af', fontSize: 15, fontFamily: 'Iceland_400Regular' },
+  // Markdown styles
+  resultText:  { color: '#e5e7eb', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 22 },
+  mdH1:        { color: '#fff', fontSize: 20, fontWeight: '700', fontFamily: 'Iceland_400Regular', marginTop: 12, marginBottom: 6 },
+  mdH2:        { color: '#fff', fontSize: 17, fontWeight: '700', fontFamily: 'Iceland_400Regular', marginTop: 10, marginBottom: 4 },
+  mdH3:        { color: '#22c55e', fontSize: 15, fontWeight: '700', fontFamily: 'Iceland_400Regular', marginTop: 8, marginBottom: 4, letterSpacing: 0.5 },
+  mdBullet:    { color: '#e5e7eb', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 22, marginBottom: 2, paddingLeft: 4 },
+  mdRule:      { height: 1, backgroundColor: '#222', marginVertical: 10 },
+  inlineCode:  { fontFamily: 'monospace', backgroundColor: '#1a1a1a', color: '#22c55e', borderRadius: 3, paddingHorizontal: 3 },
+  codeBlock:   { backgroundColor: '#0d0d0d', borderRadius: 8, padding: 12, marginVertical: 8, borderWidth: 1, borderColor: '#222' },
+  codeText:    { color: '#9ca3af', fontSize: 13, fontFamily: 'monospace', lineHeight: 18 },
+
+  postRow:     { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#1a1a1a' },
+  postTitle:   { color: '#fff', fontSize: 15, fontFamily: 'Iceland_400Regular', marginBottom: 4 },
+
+  feedbackRow:  { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8 },
+  feedbackLabel: { color: '#4b5563', fontSize: 14, fontFamily: 'Iceland_400Regular' },
+  fbBtn:        { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: '#2a2a2a' },
+  fbBtnText:    { fontSize: 16 },
+  feedbackDone: { color: '#6b7280', fontSize: 14, fontFamily: 'Iceland_400Regular', marginTop: 12 },
 });
