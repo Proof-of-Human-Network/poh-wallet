@@ -4,16 +4,6 @@ import * as Crypto from 'expo-crypto';
 // POH_DECIMALS must match the node (reward.js: 1 POH = 1e9 μPOH)
 export const POH_DECIMALS = 1_000_000_000;
 
-// ed25519 DER structure prefixes
-const PKCS8_PREFIX = new Uint8Array([
-  0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06,
-  0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20,
-]);
-const SPKI_PREFIX = new Uint8Array([
-  0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65,
-  0x70, 0x03, 0x21, 0x00,
-]);
-
 function hexToUint8(hex) {
   const arr = new Uint8Array(hex.length / 2);
   for (let i = 0; i < hex.length; i += 2) {
@@ -22,29 +12,16 @@ function hexToUint8(hex) {
   return arr;
 }
 
-function concatUint8(...arrays) {
-  const total = arrays.reduce((n, a) => n + a.length, 0);
-  const result = new Uint8Array(total);
-  let offset = 0;
-  for (const a of arrays) { result.set(a, offset); offset += a.length; }
-  return result;
-}
-
 function uint8ToBase64(arr) {
   let str = '';
   for (let i = 0; i < arr.length; i++) str += String.fromCharCode(arr[i]);
   return btoa(str);
 }
 
-function toPem(label, derBytes) {
-  const b64 = uint8ToBase64(derBytes);
-  const lines = b64.match(/.{1,64}/g) || [];
-  return `-----BEGIN ${label}-----\n${lines.join('\n')}\n-----END ${label}-----\n`;
-}
-
 /**
  * Deterministically derive an ed25519 signing keypair from the wallet's private key.
- * Returns PEM-encoded keys (compatible with Node.js crypto) plus raw nacl secretKey for signing.
+ * signingPublicKey is the raw 32-byte public key in base64 (no PEM/DER encoding).
+ * The node's Wallet.verifySignature handles both PEM and raw base64 keys.
  */
 export async function deriveSigningKeypair(privateKeyHex) {
   const seedHex = await Crypto.digestStringAsync(
@@ -55,10 +32,10 @@ export async function deriveSigningKeypair(privateKeyHex) {
   const seed = hexToUint8(seedHex);
   const { publicKey, secretKey } = nacl.sign.keyPair.fromSeed(seed);
 
-  const signingPrivateKey = toPem('PRIVATE KEY', concatUint8(PKCS8_PREFIX, seed));
-  const signingPublicKey  = toPem('PUBLIC KEY',  concatUint8(SPKI_PREFIX,  publicKey));
+  // Raw base64 of the 32-byte ed25519 public key — node wraps it into SPKI DER internally
+  const signingPublicKey = uint8ToBase64(publicKey);
 
-  return { signingPublicKey, signingPrivateKey, secretKey, publicKey };
+  return { signingPublicKey, secretKey, publicKey };
 }
 
 /**
