@@ -6,7 +6,7 @@ import {
 import { fetchOrders, fetchCurrencies } from '../services/p2pClient';
 
 const CURRENCIES = [
-  'USDT-ERC20', 'USDT-TRC20', 'USDT-TON', 'USDT-SOL', 'USDT-BEP20',
+  'All', 'USDT-ERC20', 'USDT-TRC20', 'USDT-TON', 'USDT-SOL', 'USDT-BEP20',
   'BTC', 'ETH', 'SOL', 'USDC-ERC20',
 ];
 
@@ -22,7 +22,7 @@ function timeAgo(ts) {
 }
 
 export default function P2PScreen({ selectedAddress, activeNodeUrl, onNavigate }) {
-  const [currency, setCurrency] = useState('USDT-ERC20');
+  const [currency, setCurrency] = useState('All');
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -31,7 +31,10 @@ export default function P2PScreen({ selectedAddress, activeNodeUrl, onNavigate }
     if (!activeNodeUrl) return;
     if (!silent) setLoading(true);
     try {
-      const data = await fetchOrders(activeNodeUrl, { side: 'sell', quoteCurrency: currency, status: 'open' });
+      const params = currency === 'All'
+        ? { side: 'sell', status: 'open' }
+        : { side: 'sell', quoteCurrency: currency, status: 'open' };
+      const data = await fetchOrders(activeNodeUrl, params);
       setOrders(data.orders || []);
     } catch { /* keep stale */ }
     setLoading(false);
@@ -111,7 +114,9 @@ export default function P2PScreen({ selectedAddress, activeNodeUrl, onNavigate }
           contentContainerStyle={{ padding: 12, paddingBottom: 100 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#22c55e" />}
           ListEmptyComponent={
-            <Text style={styles.emptyText}>No sell orders for {currency}</Text>
+            <Text style={styles.emptyText}>
+              {currency === 'All' ? 'No open sell orders' : `No sell orders for ${currency}`}
+            </Text>
           }
         />
       )}
