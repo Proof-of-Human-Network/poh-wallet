@@ -6,10 +6,25 @@ import {
 import * as Clipboard from 'expo-clipboard';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 
-const BASE = 'https://proofofhuman.ge';
-// const BASE = 'http://localhost:3456'; // for local dev against miner
-
-export default function AIScreen({ t, wallets = [], selectedAddress, balances = {}, setSelectedAddress, saveSelectedAddress }) {
+export default function AIScreen({ t, wallets = [], selectedAddress, balances = {}, setSelectedAddress, saveSelectedAddress, activeNodeUrl, nodes = [] }) {
+  // Try activeNodeUrl first, then other nodes by latency, then nothing
+  async function callApi(path, options = {}, _tried = null) {
+    const tried = _tried || new Set();
+    const candidate = (tried.size === 0 && activeNodeUrl && !tried.has(activeNodeUrl))
+      ? activeNodeUrl
+      : [...nodes]
+          .sort((a, b) => (a.lastLatency || 9999) - (b.lastLatency || 9999))
+          .map(n => n.url)
+          .find(u => u && !tried.has(u));
+    if (!candidate) throw new Error('No node reachable');
+    tried.add(candidate);
+    try {
+      const res = await fetch(`${candidate.replace(/\/$/, '')}${path}`, options);
+      return res;
+    } catch {
+      return callApi(path, options, tried);
+    }
+  }
   // --- Connected wallet (uses app state) ---
   const connectedAddr = selectedAddress;
   const connectedBal = selectedAddress ? (balances[selectedAddress] || 0) : 0;
@@ -115,7 +130,7 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
       return trimmed;
     }
     try {
-      const res = await fetch(`${BASE}/checker/resolve?q=${encodeURIComponent(trimmed)}`);
+      const res = await callApi(`/checker/resolve?q=${encodeURIComponent(trimmed)}`);
       const data = await res.json();
       if (Array.isArray(data) && data.length > 1) {
         setResolveResults(data);
@@ -147,7 +162,7 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
     const iv = setInterval(async () => {
       tries++;
       try {
-        const r = await fetch(`${BASE}/checker/brain/${encodeURIComponent(brainKey)}`);
+        const r = await callApi(`/checker/brain/${encodeURIComponent(brainKey)}`);
         const b = await r.json();
         if (b && b.status === 'done') {
           setBrainVerdict(b);
@@ -209,7 +224,7 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
         form.append('walletAddress', connectedAddr);
       }
 
-      const res = await fetch(`${BASE}/checker`, {
+      const res = await callApi(`/checker`, {
         method: 'POST',
         body: form,
       });
@@ -262,7 +277,7 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
     if (!addr) return;
     setScanProfileLoading(true);
     try {
-      const r = await fetch(`${BASE}/checker/profile/${encodeURIComponent(addr)}`);
+      const r = await callApi(`/checker/profile/${encodeURIComponent(addr)}`);
       if (!r.ok) throw new Error('profile fetch failed');
       const data = await r.json();
       setScanProfile(data);
@@ -281,7 +296,7 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
     setProfileLoading(true);
     setProfileError(null);
     try {
-      const res = await fetch(`${BASE}/profile/${encodeURIComponent(addr)}`);
+      const res = await callApi(`/profile/${encodeURIComponent(addr)}`);
       if (res.status === 404) {
         setProfileData(null);
       } else {
@@ -299,7 +314,7 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
     if (!connectedAddr) return;
     setRotatingKey(true);
     try {
-      const res = await fetch(`${BASE}/profile/apikey/rotate`, {
+      const res = await callApi(`/profile/apikey/rotate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ address: connectedAddr }),

@@ -1342,7 +1342,7 @@ export default function PoHMinerWallet() {
         <StatusBar barStyle="light-content" />
         <Header title="Identity Scanner" />
         <View style={{ flex: 1 }}>
-          <AIScreen t={t} wallets={wallets} selectedAddress={selectedAddress} balances={balances} setSelectedAddress={setSelectedAddress} saveSelectedAddress={saveSelected} />
+          <AIScreen t={t} wallets={wallets} selectedAddress={selectedAddress} balances={balances} setSelectedAddress={setSelectedAddress} saveSelectedAddress={saveSelected} activeNodeUrl={activeNodeUrl} nodes={nodes} />
         </View>
         <TabBar />
       </SafeAreaView>
