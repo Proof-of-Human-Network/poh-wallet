@@ -2,13 +2,18 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, Modal,
   ActivityIndicator, StyleSheet, Alert, PanResponder,
-  Animated, Easing,
+  Animated, Easing, NativeModules,
 } from 'react-native';
 import Svg, { Circle, Rect } from 'react-native-svg';
 import * as Clipboard from 'expo-clipboard';
 
+// Only use Voice if the native module is actually linked in the current build
 let Voice = null;
-try { Voice = require('@react-native-voice/voice').default; } catch { /* not linked yet */ }
+try {
+  if (NativeModules.RCTVoice) {
+    Voice = require('@react-native-voice/voice').default;
+  }
+} catch { /* not linked yet */ }
 
 // ── Log budget slider ──────────────────────────────────────────────────────────
 const LOG_MIN = 0.01, LOG_MAX = 200, LOG_STEPS = 200;
@@ -58,18 +63,19 @@ function LogSlider({ value, onChange, disabled }) {
 
 // ── Live Sphere ────────────────────────────────────────────────────────────────
 const RINGS = [
-  { r: 18, sw: 1.0, op: 0.20, dash: '70 22'  },
-  { r: 26, sw: 0.5, op: 0.30, dash: '44 14'  },
-  { r: 33, sw: 1.5, op: 0.45, dash: '88 8'   },
-  { r: 40, sw: 0.8, op: 0.55, dash: '55 6'   },
-  { r: 47, sw: 2.0, op: 0.65, dash: '108 11' },
-  { r: 53, sw: 0.5, op: 0.50, dash: '34 9'   },
-  { r: 59, sw: 1.5, op: 0.70, dash: '78 6'   },
-  { r: 65, sw: 1.0, op: 0.60, dash: '62 16'  },
-  { r: 71, sw: 2.5, op: 0.78, dash: '98 5'   },
-  { r: 76, sw: 0.5, op: 0.38, dash: '27 24'  },
-  { r: 80, sw: 1.5, op: 0.52, dash: '50 11'  },
-  { r: 84, sw: 0.8, op: 0.32, dash: '38 20'  },
+  { r: 30,  sw: 1.0, op: 0.18, dash: '80 28'  },
+  { r: 45,  sw: 0.6, op: 0.28, dash: '55 18'  },
+  { r: 58,  sw: 1.8, op: 0.42, dash: '110 10' },
+  { r: 70,  sw: 0.8, op: 0.52, dash: '70 8'   },
+  { r: 82,  sw: 2.2, op: 0.62, dash: '140 14' },
+  { r: 92,  sw: 0.5, op: 0.48, dash: '45 11'  },
+  { r: 102, sw: 1.6, op: 0.68, dash: '100 8'  },
+  { r: 112, sw: 1.0, op: 0.58, dash: '80 20'  },
+  { r: 122, sw: 2.8, op: 0.76, dash: '130 6'  },
+  { r: 130, sw: 0.5, op: 0.36, dash: '35 30'  },
+  { r: 138, sw: 1.6, op: 0.50, dash: '65 14'  },
+  { r: 146, sw: 0.8, op: 0.30, dash: '50 24'  },
+  { r: 154, sw: 1.2, op: 0.22, dash: '42 32'  },
 ];
 
 function LiveSphere({ listening = false, size = 180 }) {
@@ -80,7 +86,7 @@ function LiveSphere({ listening = false, size = 180 }) {
   useEffect(() => {
     const spin = Animated.loop(
       Animated.timing(rotation, {
-        toValue: 1, duration: listening ? 1600 : 7000,
+        toValue: 1, duration: listening ? 1600 : 14000,
         easing: Easing.linear, useNativeDriver: true,
       })
     );
@@ -118,12 +124,12 @@ function LiveSphere({ listening = false, size = 180 }) {
             />
           ))}
           {/* Digital glitch blocks */}
-          <Rect x={cx + 48} y={cx - 4}  width={14} height={5} fill="#22c55e" opacity={0.70} />
-          <Rect x={cx - 74} y={cx + 28} width={20} height={4} fill="#22c55e" opacity={0.55} />
-          <Rect x={cx + 52} y={cx + 44} width={9}  height={6} fill="#22c55e" opacity={0.80} />
-          <Rect x={cx - 62} y={cx - 52} width={16} height={3} fill="#22c55e" opacity={0.50} />
-          <Rect x={cx + 30} y={cx - 72} width={11} height={4} fill="#22c55e" opacity={0.65} />
-          <Rect x={cx - 45} y={cx + 60} width={13} height={3} fill="#22c55e" opacity={0.45} />
+          <Rect x={cx + 90}  y={cx - 6}  width={28} height={9}  fill="#22c55e" opacity={0.70} />
+          <Rect x={cx - 138} y={cx + 50} width={38} height={7}  fill="#22c55e" opacity={0.55} />
+          <Rect x={cx + 100} y={cx + 84} width={18} height={11} fill="#22c55e" opacity={0.80} />
+          <Rect x={cx - 118} y={cx - 98} width={30} height={6}  fill="#22c55e" opacity={0.50} />
+          <Rect x={cx + 56}  y={cx - 134}width={22} height={8}  fill="#22c55e" opacity={0.65} />
+          <Rect x={cx - 86}  y={cx + 114}width={26} height={6}  fill="#22c55e" opacity={0.45} />
         </Svg>
       </Animated.View>
     </Animated.View>
@@ -216,7 +222,13 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
   const beginListening = async () => {
     setVoicePhase('listening');
     if (Voice) {
-      try { await Voice.start('en-US'); } catch (e) { console.log('[Voice] start error', e); }
+      try {
+        await Voice.start('en-US');
+      } catch (e) {
+        console.log('[Voice] start error', e);
+        setVoicePhase(null);
+        Alert.alert('Voice unavailable', 'Rebuild the app to enable voice input (expo run:android).');
+      }
     }
   };
 
@@ -416,7 +428,7 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
           ) : (
             <>
               <TouchableOpacity onPress={onSphereTap} activeOpacity={0.9}>
-                <LiveSphere listening size={240} />
+                <LiveSphere listening size={320} />
               </TouchableOpacity>
               <Text style={s.voiceListening}>Listening…</Text>
               {transcript ? (
@@ -442,7 +454,7 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
           onPress={onSphereTap}
           activeOpacity={0.85}
         >
-          <LiveSphere listening={false} size={180} />
+          <LiveSphere listening={false} size={360} />
           <Text style={s.sphereHint}>{Voice ? 'Tap to speak' : 'Voice unavailable'}</Text>
         </TouchableOpacity>
 
