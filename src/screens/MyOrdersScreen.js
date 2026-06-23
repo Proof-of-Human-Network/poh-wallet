@@ -179,7 +179,7 @@ export default function MyOrdersScreen({ selectedAddress, activeNodeUrl, getPriv
           data={[...activeOrders, ...pastOrders]}
           keyExtractor={o => o.id}
           renderItem={renderOrder}
-          contentContainerStyle={{ padding: 12, paddingBottom: 100 }}
+          contentContainerStyle={{ paddingBottom: 100 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#22c55e" />}
           ListEmptyComponent={<Text style={styles.emptyText}>No orders yet. Post one from the P2P screen.</Text>}
         />
@@ -188,7 +188,7 @@ export default function MyOrdersScreen({ selectedAddress, activeNodeUrl, getPriv
           data={[...activeTrades, ...pastTrades]}
           keyExtractor={item => item.trade?.id || Math.random().toString()}
           renderItem={renderTrade}
-          contentContainerStyle={{ padding: 12, paddingBottom: 100 }}
+          contentContainerStyle={{ paddingBottom: 100 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#22c55e" />}
           ListEmptyComponent={<Text style={styles.emptyText}>No trades yet. Select an order from the P2P screen.</Text>}
         />
@@ -198,8 +198,8 @@ export default function MyOrdersScreen({ selectedAddress, activeNodeUrl, getPriv
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
+  container: { flex: 1, backgroundColor: '#000', paddingHorizontal: 10 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16 },
   back: { color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular' },
   title: { color: '#fff', fontSize: 18, fontFamily: 'Iceland_400Regular' },
   newBtn: { color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular' },

@@ -369,17 +369,17 @@ export default function TradeScreen({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
+  container: { flex: 1, backgroundColor: '#000', paddingHorizontal: 10 },
   center: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16 },
   back: { color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular' },
   title: { color: '#fff', fontSize: 18, fontFamily: 'Iceland_400Regular' },
 
-  statusBanner: { marginHorizontal: 16, marginBottom: 12, borderRadius: 8, borderWidth: 1, padding: 12, alignItems: 'center' },
+  statusBanner: { marginBottom: 12, borderRadius: 8, borderWidth: 1, padding: 12, alignItems: 'center' },
   statusText: { fontSize: 14, fontFamily: 'Iceland_400Regular', fontWeight: '700' },
   countdown: { color: '#f59e0b', fontSize: 24, fontFamily: 'Iceland_400Regular', marginTop: 4 },
 
-  card: { backgroundColor: '#111', borderRadius: 10, padding: 16, marginHorizontal: 16, marginBottom: 12, borderWidth: 1, borderColor: '#1e1e1e' },
+  card: { backgroundColor: '#111', borderRadius: 10, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#1e1e1e' },
   cardTitle: { color: '#aaa', fontSize: 14, fontFamily: 'Iceland_400Regular', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
   bigPrice: { color: '#fff', fontSize: 22, fontFamily: 'Iceland_400Regular' },
   green: { color: '#22c55e' },
@@ -389,8 +389,8 @@ const styles = StyleSheet.create({
   badge: { fontSize: 14, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 },
   sellBadge: { backgroundColor: '#7f1d1d', color: '#fca5a5' },
 
-  section: { marginHorizontal: 16, marginBottom: 16 },
-  sectionTitle: { color: '#aaa', fontSize: 14, fontFamily: 'Iceland_400Regular', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, marginHorizontal: 16 },
+  section: { marginBottom: 16 },
+  sectionTitle: { color: '#aaa', fontSize: 14, fontFamily: 'Iceland_400Regular', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
   instrText: { color: '#bbb', fontSize: 13, fontFamily: 'Iceland_400Regular', marginBottom: 10 },
   quoteCalc: { color: '#22c55e', fontFamily: 'Iceland_400Regular', marginBottom: 10 },
 
@@ -399,7 +399,7 @@ const styles = StyleSheet.create({
   methodAddress: { color: '#e5e7eb', fontSize: 15, fontFamily: 'Iceland_400Regular' },
   methodDetails: { color: '#666', fontSize: 14, fontFamily: 'Iceland_400Regular', marginTop: 4 },
 
-  infoBox: { marginHorizontal: 16, backgroundColor: '#0d0d0d', borderRadius: 8, padding: 14, borderWidth: 1, borderColor: '#1a1a1a' },
+  infoBox: { backgroundColor: '#0d0d0d', borderRadius: 8, padding: 14, borderWidth: 1, borderColor: '#1a1a1a' },
   infoText: { color: '#aaa', fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 20 },
 
   actionBtn: { backgroundColor: '#22c55e', borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginBottom: 8 },

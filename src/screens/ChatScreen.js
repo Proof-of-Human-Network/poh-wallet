@@ -2,10 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, Modal,
   ActivityIndicator, StyleSheet, Alert, PanResponder,
-  Animated, Easing, NativeModules,
+  Animated, Easing, NativeModules, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import Svg, { Circle, Rect } from 'react-native-svg';
+import { Video, ResizeMode } from 'expo-av';
 import * as Clipboard from 'expo-clipboard';
+
+const SPHERE_VIDEO = require('../../assets/sphere.mp4');
 
 // Only use Voice if the native module is actually linked in the current build
 let Voice = null;
@@ -61,78 +63,17 @@ function LogSlider({ value, onChange, disabled }) {
   );
 }
 
-// ── Live Sphere ────────────────────────────────────────────────────────────────
-const RINGS = [
-  { r: 30,  sw: 1.0, op: 0.18, dash: '80 28'  },
-  { r: 45,  sw: 0.6, op: 0.28, dash: '55 18'  },
-  { r: 58,  sw: 1.8, op: 0.42, dash: '110 10' },
-  { r: 70,  sw: 0.8, op: 0.52, dash: '70 8'   },
-  { r: 82,  sw: 2.2, op: 0.62, dash: '140 14' },
-  { r: 92,  sw: 0.5, op: 0.48, dash: '45 11'  },
-  { r: 102, sw: 1.6, op: 0.68, dash: '100 8'  },
-  { r: 112, sw: 1.0, op: 0.58, dash: '80 20'  },
-  { r: 122, sw: 2.8, op: 0.76, dash: '130 6'  },
-  { r: 130, sw: 0.5, op: 0.36, dash: '35 30'  },
-  { r: 138, sw: 1.6, op: 0.50, dash: '65 14'  },
-  { r: 146, sw: 0.8, op: 0.30, dash: '50 24'  },
-  { r: 154, sw: 1.2, op: 0.22, dash: '42 32'  },
-];
-
-function LiveSphere({ listening = false, size = 180 }) {
-  const rotation = useRef(new Animated.Value(0)).current;
-  const pulse    = useRef(new Animated.Value(1)).current;
-  const cx = size / 2;
-
-  useEffect(() => {
-    const spin = Animated.loop(
-      Animated.timing(rotation, {
-        toValue: 1, duration: listening ? 1600 : 14000,
-        easing: Easing.linear, useNativeDriver: true,
-      })
-    );
-    spin.start();
-    return () => spin.stop();
-  }, [listening]);
-
-  useEffect(() => {
-    if (listening) {
-      const anim = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulse, { toValue: 1.08, duration: 480, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-          Animated.timing(pulse, { toValue: 0.93, duration: 480, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        ])
-      );
-      anim.start();
-      return () => anim.stop();
-    } else {
-      Animated.timing(pulse, { toValue: 1, duration: 200, useNativeDriver: true }).start();
-    }
-  }, [listening]);
-
-  const rotate = rotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-
+// ── Sphere video — fills parent absolutely ────────────────────────────────────
+function SphereVideo() {
   return (
-    <Animated.View style={{ transform: [{ scale: pulse }] }}>
-      <Animated.View style={{ transform: [{ rotate }] }}>
-        <Svg width={size} height={size}>
-          {RINGS.map((ring, i) => (
-            <Circle
-              key={i} cx={cx} cy={cx} r={ring.r}
-              fill="none" stroke="#22c55e"
-              strokeWidth={ring.sw} strokeOpacity={ring.op}
-              strokeDasharray={ring.dash}
-            />
-          ))}
-          {/* Digital glitch blocks */}
-          <Rect x={cx + 90}  y={cx - 6}  width={28} height={9}  fill="#22c55e" opacity={0.70} />
-          <Rect x={cx - 138} y={cx + 50} width={38} height={7}  fill="#22c55e" opacity={0.55} />
-          <Rect x={cx + 100} y={cx + 84} width={18} height={11} fill="#22c55e" opacity={0.80} />
-          <Rect x={cx - 118} y={cx - 98} width={30} height={6}  fill="#22c55e" opacity={0.50} />
-          <Rect x={cx + 56}  y={cx - 134}width={22} height={8}  fill="#22c55e" opacity={0.65} />
-          <Rect x={cx - 86}  y={cx + 114}width={26} height={6}  fill="#22c55e" opacity={0.45} />
-        </Svg>
-      </Animated.View>
-    </Animated.View>
+    <Video
+      source={SPHERE_VIDEO}
+      style={{ width: '200%', height: '70%', top: '-20px', left: '-250px', position: 'absolute' }}
+      resizeMode={ResizeMode.COVER}
+      shouldPlay
+      isLooping
+      isMuted
+    />
   );
 }
 
@@ -419,23 +360,21 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
         animationType="fade"
         statusBarTranslucent
       >
-        <View style={s.voiceModal}>
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+          <SphereVideo />
           {voicePhase === 'countdown' ? (
-            <>
+            <View style={s.voiceOverlay}>
               <Text style={s.voiceTitle}>Start speaking in</Text>
               <CountdownDigit digit={countdown} />
-            </>
+            </View>
           ) : (
-            <>
-              <TouchableOpacity onPress={onSphereTap} activeOpacity={0.9}>
-                <LiveSphere listening size={320} />
-              </TouchableOpacity>
+            <TouchableOpacity style={s.voiceOverlay} onPress={onSphereTap} activeOpacity={0.9}>
               <Text style={s.voiceListening}>Listening…</Text>
               {transcript ? (
                 <Text style={s.voiceTranscript} numberOfLines={4}>{transcript}</Text>
               ) : null}
-              <Text style={s.voiceHint}>Tap sphere to send</Text>
-            </>
+              <Text style={s.voiceHint}>Tap to send</Text>
+            </TouchableOpacity>
           )}
           <TouchableOpacity style={s.voiceCancel} onPress={cancelVoice}>
             <Text style={s.voiceCancelText}>Cancel</Text>
@@ -443,122 +382,118 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
         </View>
       </Modal>
 
-      {/* ── Main screen ────────────────────────────────────────────────────── */}
-      <ScrollView style={s.root} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-        <Text style={s.heading}>ASK THE NETWORK</Text>
-        <Text style={s.sub}>Simple questions are free. Real-time data queries use a skill and require a small fee.</Text>
+      {/* ── Main screen: video fills screen, controls float at bottom ──────── */}
+      <View style={s.root}>
+        {/* Fullscreen looping video */}
+        <SphereVideo />
 
-        {/* Sphere */}
-        <TouchableOpacity
-          style={s.sphereWrap}
-          onPress={onSphereTap}
-          activeOpacity={0.85}
-        >
-          <LiveSphere listening={false} size={360} />
-          <Text style={s.sphereHint}>{Voice ? 'Tap to speak' : 'Voice unavailable'}</Text>
+        {/* Tappable upper area */}
+        <TouchableOpacity style={s.videoTap} onPress={onSphereTap} activeOpacity={0.85}>
+          <Text style={s.sphereHint}>{Voice ? 'Tap to speak' : ''}</Text>
         </TouchableOpacity>
 
-        <TextInput
-          style={s.input}
-          placeholder={"What's the latest from vitalik.eth on Paragraph?"}
-          placeholderTextColor="#4b5563"
-          value={message}
-          onChangeText={setMessage}
-          multiline
-          numberOfLines={3}
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={!loading}
-        />
+        {/* Bottom panel overlay */}
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={s.panel}>
+          <ScrollView keyboardShouldPersistTaps="handled" style={{ backgroundColor: '#000' }} contentContainerStyle={s.panelContent}>
+            <TextInput
+              style={s.input}
+              placeholder={"Ask the network anything…"}
+              placeholderTextColor="#4b5563"
+              value={message}
+              onChangeText={setMessage}
+              multiline
+              numberOfLines={3}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!loading}
+            />
 
-        <View style={s.feeRow}>
-          <Text style={s.label}>MAX FEE <Text style={s.labelNote}>(data skills only)</Text></Text>
-          <Text style={s.feeValue}>{budget <= 0 ? 'no fee' : `${_fmtPoh(budget)} POH`}</Text>
-        </View>
-        <LogSlider value={budget} onChange={setBudget} disabled={loading} />
-        <Text style={s.feeNote}>
-          Balance: {balance.toFixed(2)} POH · fee only deducted when a data skill is used
-        </Text>
-
-        {error ? (
-          <View style={s.errorBox}><Text style={s.errorText}>{error}</Text></View>
-        ) : null}
-
-        <TouchableOpacity
-          style={[s.submitBtn, (loading || !message.trim()) && s.submitBtnDisabled]}
-          onPress={submit}
-          disabled={loading || !message.trim()}
-        >
-          {loading ? (
-            <View style={s.submitRow}>
-              <ActivityIndicator color="#000" size="small" />
-              <Text style={[s.submitBtnText, { marginLeft: 8 }]}>{statusText || 'Thinking...'}</Text>
+            <View style={s.feeRow}>
+              <Text style={s.label}>MAX FEE <Text style={s.labelNote}>(data skills only)</Text></Text>
+              <Text style={s.feeValue}>{budget <= 0 ? 'no fee' : `${_fmtPoh(budget)} POH`}</Text>
             </View>
-          ) : (
-            <Text style={s.submitBtnText}>Ask</Text>
-          )}
-        </TouchableOpacity>
+            <LogSlider value={budget} onChange={setBudget} disabled={loading} />
+            <Text style={s.feeNote}>
+              Balance: {balance.toFixed(2)} POH · fee only deducted when a data skill is used
+            </Text>
 
-        {result ? (
-          <View style={s.resultBox}>
-            <View style={s.resultHeaderRow}>
-              <Text style={s.resultHeader}>
-                {isSkillResult
-                  ? `${result.skillId}${result.tokensUsed ? `  ·  ${result.tokensUsed} tokens` : ''}`
-                  : 'AI'}
-              </Text>
-              <TouchableOpacity style={s.copyBtn} onPress={copyResponse}>
-                <Text style={s.copyBtnText}>⎘ Copy</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView nestedScrollEnabled style={s.resultScroll}>
-              {result.type === 'chat'
-                ? <Text style={s.resultText}>{result.message}</Text>
-                : result.nlResponse
-                  ? <Text style={s.resultText}>{result.nlResponse}</Text>
-                  : renderSkillOutput(result.output)
-              }
-            </ScrollView>
-            {isSkillResult && (
-              result.feedback ? (
-                <Text style={s.feedbackDone}>
-                  {result.feedback === 'positive' ? '👍 Thanks for your feedback!' : '👎 Noted — miner penalised'}
-                </Text>
+            {error ? (
+              <View style={s.errorBox}><Text style={s.errorText}>{error}</Text></View>
+            ) : null}
+
+            <TouchableOpacity
+              style={[s.submitBtn, (loading || !message.trim()) && s.submitBtnDisabled]}
+              onPress={submit}
+              disabled={loading || !message.trim()}
+            >
+              {loading ? (
+                <View style={s.submitRow}>
+                  <ActivityIndicator color="#000" size="small" />
+                  <Text style={[s.submitBtnText, { marginLeft: 8 }]}>{statusText || 'Thinking...'}</Text>
+                </View>
               ) : (
-                <View style={s.feedbackRow}>
-                  <Text style={s.feedbackLabel}>Helpful?</Text>
-                  <TouchableOpacity style={s.fbBtn} onPress={() => sendFeedback('positive')}>
-                    <Text style={s.fbBtnText}>👍</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={s.fbBtn} onPress={() => sendFeedback('negative')}>
-                    <Text style={s.fbBtnText}>👎</Text>
+                <Text style={s.submitBtnText}>Ask</Text>
+              )}
+            </TouchableOpacity>
+
+            {result ? (
+              <View style={s.resultBox}>
+                <View style={s.resultHeaderRow}>
+                  <Text style={s.resultHeader}>
+                    {isSkillResult
+                      ? `${result.skillId}${result.tokensUsed ? `  ·  ${result.tokensUsed} tokens` : ''}`
+                      : 'AI'}
+                  </Text>
+                  <TouchableOpacity style={s.copyBtn} onPress={copyResponse}>
+                    <Text style={s.copyBtnText}>⎘ Copy</Text>
                   </TouchableOpacity>
                 </View>
-              )
-            )}
-          </View>
-        ) : null}
-      </ScrollView>
+                <ScrollView nestedScrollEnabled style={s.resultScroll}>
+                  {result.type === 'chat'
+                    ? <Text style={s.resultText}>{result.message}</Text>
+                    : result.nlResponse
+                      ? <Text style={s.resultText}>{result.nlResponse}</Text>
+                      : renderSkillOutput(result.output)
+                  }
+                </ScrollView>
+                {isSkillResult && (
+                  result.feedback ? (
+                    <Text style={s.feedbackDone}>
+                      {result.feedback === 'positive' ? '👍 Thanks for your feedback!' : '👎 Noted — miner penalised'}
+                    </Text>
+                  ) : (
+                    <View style={s.feedbackRow}>
+                      <Text style={s.feedbackLabel}>Helpful?</Text>
+                      <TouchableOpacity style={s.fbBtn} onPress={() => sendFeedback('positive')}>
+                        <Text style={s.fbBtnText}>👍</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={s.fbBtn} onPress={() => sendFeedback('negative')}>
+                        <Text style={s.fbBtnText}>👎</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )
+                )}
+              </View>
+            ) : null}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
     </>
   );
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1 },
-  content: { paddingBottom: 20 },
+  // Root: video fills screen, children stack on top
+  root:     { flex: 1, backgroundColor: '#000' },
+  videoTap: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 12 },
+  sphereHint: { color: 'rgba(255,255,255,0.35)', fontSize: 12, fontFamily: 'Iceland_400Regular', letterSpacing: 1 },
 
-  heading: { color: '#4b5563', fontSize: 13, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular', marginBottom: 4 },
-  sub:     { color: '#6b7280', fontSize: 15, fontFamily: 'Iceland_400Regular', marginBottom: 16 },
-
-  // Sphere
-  sphereWrap: { alignItems: 'center', marginBottom: 8 },
-  sphereHint: { color: '#374151', fontSize: 12, fontFamily: 'Iceland_400Regular', marginTop: 4, letterSpacing: 1 },
-
-  input: {
-    backgroundColor: '#111', color: '#fff', padding: 14,
-    borderRadius: 10, marginBottom: 16, fontSize: 13,
-    fontFamily: 'Iceland_400Regular', borderWidth: 1, borderColor: '#1f1f1f',
-    minHeight: 80, textAlignVertical: 'top',
+  // Bottom control panel
+  panel: { maxHeight: '55%', backgroundColor: '#000' },
+  panelContent: {
+    backgroundColor: 'rgba(0,0,0,0.88)',
+    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 20,
+    borderTopWidth: 1, borderTopColor: '#1a1a1a',
   },
 
   label:     { color: '#4b5563', fontSize: 13, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular' },
@@ -567,20 +502,27 @@ const s = StyleSheet.create({
   feeValue:  { color: '#22c55e', fontSize: 15, fontFamily: 'Iceland_400Regular' },
   feeNote:   { color: '#374151', fontSize: 13, fontFamily: 'Iceland_400Regular', marginBottom: 12, marginTop: 2 },
 
+  input: {
+    backgroundColor: '#0d0d0d', color: '#fff', padding: 14,
+    borderRadius: 10, marginBottom: 12, fontSize: 13,
+    fontFamily: 'Iceland_400Regular', borderWidth: 1, borderColor: '#222',
+    minHeight: 72, textAlignVertical: 'top',
+  },
+
   errorBox:  { backgroundColor: '#1c0a0a', borderRadius: 8, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#ef4444' },
   errorText: { color: '#ef4444', fontSize: 15, fontFamily: 'Iceland_400Regular' },
 
-  submitBtn:         { backgroundColor: '#22c55e', padding: 16, borderRadius: 4, alignItems: 'center', marginBottom: 16 },
+  submitBtn:         { backgroundColor: '#22c55e', padding: 14, borderRadius: 4, alignItems: 'center', marginBottom: 14 },
   submitBtnDisabled: { backgroundColor: '#166534', opacity: 0.7 },
   submitBtnText:     { color: '#000', fontWeight: '700', fontSize: 16, fontFamily: 'Iceland_400Regular' },
   submitRow:         { flexDirection: 'row', alignItems: 'center' },
 
-  resultBox:       { backgroundColor: '#0d0d0d', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#1f2f1f' },
+  resultBox:       { backgroundColor: '#0a0a0a', borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#1f2f1f' },
   resultHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   resultHeader:    { color: '#22c55e', fontSize: 13, fontFamily: 'Iceland_400Regular', letterSpacing: 1, flex: 1 },
   copyBtn:         { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4, borderWidth: 1, borderColor: '#2a2a2a' },
   copyBtnText:     { color: '#6b7280', fontSize: 14, fontFamily: 'Iceland_400Regular' },
-  resultScroll:    { maxHeight: 420 },
+  resultScroll:    { maxHeight: 280 },
   resultText:      { color: '#e5e7eb', fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 20 },
   resultJson:      { color: '#9ca3af', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 16 },
   resultSection:   { color: '#4b5563', fontSize: 15, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular', marginTop: 12, marginBottom: 4 },
@@ -593,9 +535,9 @@ const s = StyleSheet.create({
   fbBtnText:       { fontSize: 16 },
   feedbackDone:    { color: '#6b7280', fontSize: 14, fontFamily: 'Iceland_400Regular', marginTop: 12 },
 
-  // Voice modal
-  voiceModal: {
-    flex: 1, backgroundColor: '#000',
+  // Voice modal overlay (on top of fullscreen video)
+  voiceOverlay: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center', justifyContent: 'center',
     paddingHorizontal: 32,
   },
@@ -609,18 +551,18 @@ const s = StyleSheet.create({
   },
   voiceListening: {
     color: '#fff', fontSize: 18, fontFamily: 'Iceland_400Regular',
-    letterSpacing: 2, marginTop: 24,
+    letterSpacing: 2,
   },
   voiceTranscript: {
     color: '#9ca3af', fontSize: 15, fontFamily: 'Iceland_400Regular',
     textAlign: 'center', marginTop: 16, lineHeight: 22,
   },
   voiceHint: {
-    color: '#374151', fontSize: 13, fontFamily: 'Iceland_400Regular',
+    color: 'rgba(255,255,255,0.35)', fontSize: 13, fontFamily: 'Iceland_400Regular',
     letterSpacing: 1, marginTop: 12,
   },
   voiceCancel: {
-    position: 'absolute', bottom: 60,
+    position: 'absolute', bottom: 60, alignSelf: 'center',
     paddingHorizontal: 24, paddingVertical: 12,
     borderRadius: 24, borderWidth: 1, borderColor: '#333',
   },

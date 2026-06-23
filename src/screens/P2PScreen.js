@@ -111,7 +111,7 @@ export default function P2PScreen({ selectedAddress, activeNodeUrl, onNavigate }
           data={orders}
           keyExtractor={o => o.id}
           renderItem={renderOrder}
-          contentContainerStyle={{ padding: 12, paddingBottom: 100 }}
+          contentContainerStyle={{ paddingBottom: 100 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#22c55e" />}
           ListEmptyComponent={
             <Text style={styles.emptyText}>
@@ -135,13 +135,13 @@ export default function P2PScreen({ selectedAddress, activeNodeUrl, onNavigate }
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 },
+  container: { flex: 1, backgroundColor: '#000', paddingHorizontal: 10 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 16, paddingBottom: 8 },
   title: { color: '#fff', fontSize: 20, fontFamily: 'Iceland_400Regular' },
   myOrdersBtn: { borderWidth: 1, borderColor: '#333', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
   myOrdersBtnText: { color: '#aaa', fontSize: 15, fontFamily: 'Iceland_400Regular' },
 
-  currencyScroll: { paddingHorizontal: 12, marginBottom: 8, flexGrow: 0 },
+  currencyScroll: { marginBottom: 8, flexGrow: 0 },
   currencyPill: { borderRadius: 14, borderWidth: 1, borderColor: '#333', paddingHorizontal: 10, paddingVertical: 5, marginRight: 6 },
   currencyPillActive: { borderColor: '#22c55e', backgroundColor: '#052e16' },
   currencyPillText: { color: '#888', fontSize: 14, fontFamily: 'Iceland_400Regular' },

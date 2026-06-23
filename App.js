@@ -603,7 +603,40 @@ export default function PoHMinerWallet() {
             text: t('create.copy_pk'),
             onPress: async () => {
               await Clipboard.setStringAsync(privateKey);
-              Alert.alert(t('alert.copied'), t('alert.pk_copied'));
+              Alert.alert(
+                t('alert.copied'),
+                t('alert.pk_copied'),
+                [
+                  {
+                    text: t('alert.cancel'),
+                    style: 'cancel',
+                    onPress: () => setLoading(false),
+                  },
+                  {
+                    text: t('create.saved_pk'),
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        const newEntry = { address, createdAt: Date.now() };
+                        const updated = [...wallets, newEntry];
+                        setWallets(updated);
+                        await Storage.saveWallets(updated);
+                        await storePrivateKey(address, privateKey);
+                        setSelectedAddress(address);
+                        await Storage.saveSelectedAddress(address);
+                        setBalances(prev => ({ ...prev, [address]: 0 }));
+                        await showNotification(t('notif.created_title'), t('notif.created_body', { addr: address.slice(0, 18) }));
+                        Alert.alert(t('create.created_title'), t('create.created_body', { address }));
+                        setCurrentScreen('home');
+                      } catch (e) {
+                        Alert.alert(t('create.error_save'), e.message);
+                      } finally {
+                        setLoading(false);
+                      }
+                    },
+                  },
+                ]
+              );
             },
           },
           {
@@ -1049,7 +1082,7 @@ export default function PoHMinerWallet() {
       <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
         <StatusBar barStyle="light-content" />
         <Header title={t('send.title')} />
-        <ScrollView contentContainerStyle={{ paddingBottom: 100 }} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 10 }} keyboardShouldPersistTaps="handled">
 
           <Text style={styles.fieldLabel}>TO</Text>
           <View style={styles.toRow}>
@@ -1213,7 +1246,7 @@ export default function PoHMinerWallet() {
         <FlatList
           data={txs}
           keyExtractor={(item, i) => item.id || String(i)}
-          contentContainerStyle={{ paddingBottom: 100 }}
+          contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 10 }}
           ListHeaderComponent={
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <Text style={styles.sectionTitle}>ALL TRANSACTIONS</Text>
@@ -1268,7 +1301,7 @@ export default function PoHMinerWallet() {
       <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
         <StatusBar barStyle="light-content" />
         <Header title={t('wallets.title')} />
-        <ScrollView contentContainerStyle={{ paddingBottom: 100 }} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 10 }} keyboardShouldPersistTaps="handled">
           {wallets.length === 0 && (
             <Text style={{ color: '#4b5563', marginBottom: 20, fontFamily: 'Iceland_400Regular' }}>{t('wallets.none')}</Text>
           )}
@@ -1323,7 +1356,7 @@ export default function PoHMinerWallet() {
       <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
         <StatusBar barStyle="light-content" />
         <Header title="Ask AI" />
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
           <ChatScreen
             activeNodeUrl={activeNodeUrl}
             nodes={nodes}
@@ -1356,7 +1389,7 @@ export default function PoHMinerWallet() {
         <Header title="Settings" />
 
         {/* Segmented tabs */}
-        <View style={{ flexDirection: 'row', marginBottom: 16, backgroundColor: '#111', borderRadius: 4, padding: 3 }}>
+        <View style={{ flexDirection: 'row', marginBottom: 16, marginHorizontal: 10, backgroundColor: '#111', borderRadius: 4, padding: 3 }}>
           {[
             { key: 'nodes',    label: t('settings.nodes_tab') },
             { key: 'language', label: t('settings.language_tab') },
@@ -1385,7 +1418,7 @@ export default function PoHMinerWallet() {
           ))}
         </View>
 
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 140 }} keyboardShouldPersistTaps="handled">
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 140, paddingHorizontal: 10 }} keyboardShouldPersistTaps="handled">
           {settingsTab === 'nodes' ? (
             <>
               <Text style={{ color: '#4b5563', marginBottom: 12, fontSize: 13, fontFamily: 'Iceland_400Regular' }}>
@@ -1631,10 +1664,10 @@ export default function PoHMinerWallet() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000', paddingTop: 50, paddingBottom: 95, paddingHorizontal: 20 },
+  container: { flex: 1, backgroundColor: '#000', paddingTop: 50, paddingBottom: 95 },
 
   // Header
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingHorizontal: 10 },
   title: { fontSize: 20, color: '#fff', fontFamily: 'Iceland_400Regular' },
   settingsIcon: { color: '#6b7280', fontSize: 18 },
 
@@ -1644,6 +1677,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 16,
     marginBottom: 12,
+    marginHorizontal: 10,
     borderWidth: 1,
     borderColor: 'rgba(34,197,94,0.35)',
   },
@@ -1655,13 +1689,13 @@ const styles = StyleSheet.create({
   sync: { color: '#374151', fontSize: 13, fontFamily: 'Iceland_400Regular' },
 
   // Action row
-  actions: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  actions: { flexDirection: 'row', gap: 8, marginBottom: 16, marginHorizontal: 10 },
   actionBtn: { flex: 1, backgroundColor: '#111', paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
   actionIcon: { color: '#fff', fontSize: 20, marginBottom: 4 },
   actionText: { color: '#9ca3af', fontSize: 14, fontFamily: 'Iceland_400Regular' },
 
   // Section
-  section: { flex: 1, marginBottom: 12 },
+  section: { flex: 1, marginBottom: 12, marginHorizontal: 10 },
   sectionTitle: { color: '#4b5563', fontSize: 13, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular' },
 
   // Tx rows

@@ -239,12 +239,12 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16 },
+  container: { flex: 1, backgroundColor: '#000', paddingHorizontal: 10 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16 },
   back: { color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular' },
   title: { color: '#fff', fontSize: 18, fontFamily: 'Iceland_400Regular' },
 
-  section: { marginHorizontal: 16, marginBottom: 20 },
+  section: { marginBottom: 20 },
   label: { color: '#aaa', fontSize: 15, fontFamily: 'Iceland_400Regular', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
   hint: { color: '#555', fontSize: 14, fontFamily: 'Iceland_400Regular', marginTop: 6 },
 
@@ -273,6 +273,6 @@ const styles = StyleSheet.create({
   networkPillText: { color: '#888', fontSize: 13, fontFamily: 'Iceland_400Regular' },
   networkPillTextActive: { color: '#22c55e' },
 
-  submitBtn: { marginHorizontal: 16, backgroundColor: '#22c55e', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
+  submitBtn: { backgroundColor: '#22c55e', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
   submitText: { color: '#000', fontSize: 16, fontWeight: '700', fontFamily: 'Iceland_400Regular' },
 });
