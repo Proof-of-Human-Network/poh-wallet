@@ -78,7 +78,7 @@ export function signData(data, secretKey) {
  * amount is in display POH units (e.g. 1.5); converted internally to μPOH.
  * nonce must be currentConfirmedNonce + 1.
  */
-export async function buildSignedTransaction({ from, to, amount, fee = 0, nonce, memo = '', secretKey }) {
+export async function buildSignedTransaction({ from, to, amount, fee = 0, nonce, memo = '', secretKey, signingPublicKey }) {
   const amountMicro = Math.round(parseFloat(amount) * POH_DECIMALS);
   const timestamp = Date.now();
 
@@ -92,5 +92,6 @@ export async function buildSignedTransaction({ from, to, amount, fee = 0, nonce,
 
   const signature = signData(txHash, secretKey);
 
-  return { from, to, amount: amountMicro, fee, nonce, timestamp, memo, txHash, signature };
+  // signingPublicKey is required by PoHTransaction.verify() on the node
+  return { from, to, amount: amountMicro, fee, nonce, timestamp, memo, txHash, signature, signingPublicKey };
 }

@@ -836,8 +836,8 @@ export default function PoHMinerWallet() {
       if (nonceData.error) throw new Error(nonceData.error);
       const nonce = Math.max(nonceData.nonce || 0, nonceData.pendingNonce || 0) + 1;
 
-      // Build and sign the transaction
-      const signedTx = await buildSignedTransaction({ from: selectedAddress, to, amount, fee: 0, nonce, secretKey });
+      // Build and sign the transaction (signingPublicKey required by node's verify())
+      const signedTx = await buildSignedTransaction({ from: selectedAddress, to, amount, fee: 0, nonce, secretKey, signingPublicKey });
 
       // Submit to mempool — node validates signature + nonce + balance, gossips to peers
       const res = await callNodeApi('/api/tx/submit', {
