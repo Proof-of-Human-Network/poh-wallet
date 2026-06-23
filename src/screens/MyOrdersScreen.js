@@ -70,13 +70,14 @@ export default function MyOrdersScreen({ selectedAddress, activeNodeUrl, getPriv
   };
 
   const renderOrder = ({ item: order }) => {
+    if (!order) return null;
     const color = ORDER_STATUS_COLOR[order.status] || '#888';
     return (
       <View style={styles.card}>
         <View style={styles.cardRow}>
-          <Text style={[styles.badge, { backgroundColor: color + '22', color }]}>{order.status.toUpperCase()}</Text>
+          <Text style={[styles.badge, { backgroundColor: color + '22', color }]}>{(order.status || '').toUpperCase()}</Text>
           <Text style={[styles.badge, order.side === 'sell' ? styles.sellBadge : styles.buyBadge]}>
-            {order.side.toUpperCase()}
+            {(order.side || '').toUpperCase()}
           </Text>
         </View>
         <Text style={styles.cardTitle}>{formatPOH(order.pohAmount)} POH</Text>
@@ -111,7 +112,11 @@ export default function MyOrdersScreen({ selectedAddress, activeNodeUrl, getPriv
   };
 
   const renderTrade = ({ item }) => {
-    const { trade, order } = item;
+    if (!item) return null;
+    // API may return { trade, order } pairs or flat trade objects
+    const trade = item.trade ?? item;
+    const order = item.order ?? null;
+    if (!trade?.status) return null;
     const isMaker = order?.maker === selectedAddress;
     const color = TRADE_STATUS_COLOR[trade.status] || '#888';
     return (
@@ -136,8 +141,9 @@ export default function MyOrdersScreen({ selectedAddress, activeNodeUrl, getPriv
 
   const activeOrders = orders.filter(o => ['open', 'locked', 'disputed'].includes(o.status));
   const pastOrders   = orders.filter(o => ['completed', 'cancelled'].includes(o.status));
-  const activeTrades = trades.filter(t => !['completed', 'cancelled'].includes(t.trade?.status));
-  const pastTrades   = trades.filter(t =>  ['completed', 'cancelled'].includes(t.trade?.status));
+  const tradeStatus  = t => (t.trade ?? t)?.status;
+  const activeTrades = trades.filter(t => !['completed', 'cancelled'].includes(tradeStatus(t)));
+  const pastTrades   = trades.filter(t =>  ['completed', 'cancelled'].includes(tradeStatus(t)));
 
   return (
     <View style={styles.container}>
