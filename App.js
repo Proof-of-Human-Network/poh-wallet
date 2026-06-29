@@ -48,6 +48,7 @@ import {
   TradeScreen,
   MyOrdersScreen,
   ReferralScreen,
+  ExplorerScreen,
 } from './src/screens';
 
 // Keep the splash screen visible while we load fonts
@@ -1256,9 +1257,14 @@ export default function PoHMinerWallet() {
           ListHeaderComponent={
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <Text style={styles.sectionTitle}>ALL TRANSACTIONS</Text>
-              <TouchableOpacity onPress={() => refreshAll(false)}>
-                <Text style={{ color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular' }}>{t('history.refresh')}</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity onPress={() => setCurrentScreen('explorer')}>
+                  <Text style={{ color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular' }}>Explorer →</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => refreshAll(false)}>
+                  <Text style={{ color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular' }}>{t('history.refresh')}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           }
           renderItem={({ item }) => {
@@ -1296,6 +1302,19 @@ export default function PoHMinerWallet() {
               {t('history.no_history')}
             </Text>
           }
+        />
+        <TabBar />
+      </SafeAreaView>
+    );
+  }
+
+  if (currentScreen === 'explorer') {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} onLayout={onLayoutRootView}>
+        <StatusBar barStyle="light-content" backgroundColor="#000" />
+        <ExplorerScreen
+          activeNodeUrl={activeNodeUrl}
+          onNavigate={(screen) => setCurrentScreen(screen)}
         />
         <TabBar />
       </SafeAreaView>
