@@ -47,6 +47,7 @@ import {
   CreateOrderScreen,
   TradeScreen,
   MyOrdersScreen,
+  ReferralScreen,
 } from './src/screens';
 
 // Keep the splash screen visible while we load fonts
@@ -149,7 +150,7 @@ export default function PoHMinerWallet() {
 
   const pollRef = useRef(null);
   const prevBalanceRef = useRef(0);
-  const [pohUsdRate, setPohUsdRate] = useState(1.50);
+  const [pohUsdRate, setPohUsdRate] = useState(null);
 
   const selectedWallet = wallets.find(w => w.address === selectedAddress) || wallets[0] || null;
   const currentBalance = selectedAddress ? (balances[selectedAddress] || 0) : 0;
@@ -423,13 +424,14 @@ export default function PoHMinerWallet() {
         const data = await res.json();
         const orders = data.orders || [];
         for (const o of orders) {
-          if (o.pricePerPOH > 0 && (bestRate === null || o.pricePerPOH > bestRate)) {
+          if (o.pricePerPOH > 0 && (bestRate === null || o.pricePerPOH < bestRate)) {
             bestRate = o.pricePerPOH;
           }
         }
       }
-      if (bestRate !== null) setPohUsdRate(bestRate);
-    } catch { /* keep previous rate */ }
+      // Always update: set to null if no orders so the USD line hides
+      setPohUsdRate(bestRate);
+    } catch { /* network error — leave rate as-is */ }
   }
 
   async function refreshAll(silent = false) {
@@ -441,7 +443,7 @@ export default function PoHMinerWallet() {
     ]);
   }
 
-  // Live polling while on home
+  // Live polling while on home; single fetch on history tab
   useEffect(() => {
     if (pollRef.current) clearInterval(pollRef.current);
 
@@ -450,6 +452,8 @@ export default function PoHMinerWallet() {
       pollRef.current = setInterval(() => {
         refreshAll(true);
       }, 8000);
+    } else if (currentScreen === 'history' && selectedAddress) {
+      fetchTransactions(selectedAddress);
     }
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -994,7 +998,9 @@ export default function PoHMinerWallet() {
             <Text style={styles.balance}>{currentBalance.toFixed(2)}</Text>
             <Text style={styles.balanceCurrency}> POH</Text>
           </View>
-          <Text style={styles.usd}>≈ ${(currentBalance * pohUsdRate).toFixed(2)} USD</Text>
+          {pohUsdRate !== null && (
+            <Text style={styles.usd}>≈ ${(currentBalance * pohUsdRate).toFixed(2)} USD</Text>
+          )}
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
             {loading && <ActivityIndicator color="#22c55e" size="small" style={{ marginRight: 8 }} />}
             <TouchableOpacity onPress={copyAddress} style={{ flex: 1 }}>
@@ -1645,6 +1651,16 @@ export default function PoHMinerWallet() {
         <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} onLayout={onLayoutRootView}>
           <StatusBar barStyle="light-content" backgroundColor="#000" />
           <MyOrdersScreen {...commonProps} />
+          <TabBar />
+        </SafeAreaView>
+      );
+    }
+
+    if (p2pScreen === 'referral') {
+      return (
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} onLayout={onLayoutRootView}>
+          <StatusBar barStyle="light-content" backgroundColor="#000" />
+          <ReferralScreen {...commonProps} />
           <TabBar />
         </SafeAreaView>
       );

@@ -10,3 +10,4 @@ export { default as P2PScreen } from './P2PScreen';
 export { default as CreateOrderScreen } from './CreateOrderScreen';
 export { default as TradeScreen } from './TradeScreen';
 export { default as MyOrdersScreen } from './MyOrdersScreen';
+export { default as ReferralScreen } from './ReferralScreen';

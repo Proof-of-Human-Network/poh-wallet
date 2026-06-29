@@ -123,3 +123,19 @@ export const releaseTrade    = (nodeUrl, params) => tradeAction(nodeUrl, { ...pa
 export const cancelTrade     = (nodeUrl, params) => tradeAction(nodeUrl, { ...params, action: 'cancel' });
 export const disputeTrade    = (nodeUrl, { reason, ...params }) =>
   tradeAction(nodeUrl, { ...params, action: 'dispute', extra: { reason } });
+
+// ─── Referral ─────────────────────────────────────────────────────────────────
+
+export async function fetchReferralStats(nodeUrl, address) {
+  const res = await fetch(`${nodeUrl}/api/p2p/referral?address=${encodeURIComponent(address)}`);
+  return res.json();
+}
+
+export async function applyReferralCode(nodeUrl, address, code) {
+  const res = await fetch(`${nodeUrl}/api/p2p/referral/apply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ address, code }),
+  });
+  return res.json();
+}

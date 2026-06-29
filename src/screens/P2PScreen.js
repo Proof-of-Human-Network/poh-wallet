@@ -82,12 +82,20 @@ export default function P2PScreen({ selectedAddress, activeNodeUrl, onNavigate }
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>P2P Exchange</Text>
-        <TouchableOpacity
-          style={styles.myOrdersBtn}
-          onPress={() => onNavigate('myOrders')}
-        >
-          <Text style={styles.myOrdersBtnText}>My Orders</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity
+            style={styles.myOrdersBtn}
+            onPress={() => onNavigate('referral')}
+          >
+            <Text style={styles.myOrdersBtnText}>Referrals</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.myOrdersBtn}
+            onPress={() => onNavigate('myOrders')}
+          >
+            <Text style={styles.myOrdersBtnText}>My Orders</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Currency filter */}

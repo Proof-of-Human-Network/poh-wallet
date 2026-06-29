@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   ScrollView, Alert, ActivityIndicator,
 } from 'react-native';
-import { createOrder } from '../services/p2pClient';
+import { createOrder, applyReferralCode } from '../services/p2pClient';
 
 const POH_DECIMALS = 1_000_000_000;
 
@@ -37,6 +37,7 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
   const [minTrade, setMinTrade] = useState('');
   const [maxTrade, setMaxTrade] = useState('');
   const [methods, setMethods] = useState([{ network: defaultNetwork('USDT-ERC20'), address: '', details: '' }]);
+  const [referralCode, setReferralCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // Auto-update network when currency changes (single-network currencies)
@@ -68,6 +69,11 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
     try {
       const privateKey = await getPrivateKey(selectedAddress);
       if (!privateKey) return Alert.alert('Error', 'Private key not found. Import your wallet first.');
+
+      // Apply referral code if provided (best-effort, non-blocking)
+      if (referralCode.trim()) {
+        await applyReferralCode(activeNodeUrl, selectedAddress, referralCode.trim().toUpperCase()).catch(() => {});
+      }
 
       const pohAmountMicro = Math.round(poh * POH_DECIMALS);
       const minVal = parseFloat(minTrade) || 0;
@@ -226,6 +232,19 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
         <TouchableOpacity style={styles.addMethodBtn} onPress={addMethod}>
           <Text style={styles.addMethodText}>+ Add payment method</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* Referral code */}
+      <View style={styles.section}>
+        <Text style={styles.label}>Referral Code (optional)</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="e.g. A1B2C3D4"
+          placeholderTextColor="#555"
+          autoCapitalize="characters"
+          value={referralCode}
+          onChangeText={setReferralCode}
+        />
       </View>
 
       {/* Submit */}
