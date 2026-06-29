@@ -386,6 +386,18 @@ export default function PoHMinerWallet() {
     if (!silent) setLoading(false);
   }
 
+  async function rebuildBalance() {
+    if (!activeNodeUrl) return;
+    setLoading(true);
+    try {
+      await callNodeApi('/api/wallet/rebuild', { method: 'POST' });
+      await fetchBalance(selectedAddress, true);
+    } catch (e) {
+      console.warn('Rebuild failed:', e.message);
+    }
+    setLoading(false);
+  }
+
   async function fetchTransactions(address) {
     if (!activeNodeUrl || !address) return;
     try {
@@ -1035,9 +1047,14 @@ export default function PoHMinerWallet() {
         <View style={styles.section}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <Text style={styles.sectionTitle}>RECENT</Text>
-            <TouchableOpacity onPress={() => refreshAll(false)}>
-              <Text style={{ color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular' }}>{t('home.refresh')}</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity onPress={rebuildBalance}>
+                <Text style={{ color: '#a78bfa', fontSize: 13, fontFamily: 'Iceland_400Regular' }}>Rebuild</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => refreshAll(false)}>
+                <Text style={{ color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular' }}>{t('home.refresh')}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
           <FlatList
             data={txs.slice(0, 8)}
