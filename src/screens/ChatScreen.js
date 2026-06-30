@@ -5,6 +5,10 @@ import {
   KeyboardAvoidingView, Platform,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+
+const MAX_ATTACH_BYTES = 100 * 1024;
 
 // ── Log budget slider ──────────────────────────────────────────────────────────
 const LOG_MIN = 0.01, LOG_MAX = 200, LOG_STEPS = 200;
@@ -124,8 +128,28 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
   const [statusText, setStatusText] = useState('');
   const [result,     setResult]     = useState(null);
   const [error,      setError]      = useState(null);
+  const [attachedFile, setAttachedFile] = useState(null); // { name, content }
 
   const balance = selectedAddress ? (balances?.[selectedAddress] ?? 0) : 0;
+
+  // ── File attachment ───────────────────────────────────────────────────────
+  const pickAttachment = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
+      if (result.canceled || !result.assets?.length) return;
+      const file = result.assets[0];
+      if (file.size && file.size > MAX_ATTACH_BYTES) {
+        Alert.alert('File too large', `Max 100KB. "${file.name}" is ${(file.size / 1024).toFixed(0)}KB.`);
+        return;
+      }
+      const content = await FileSystem.readAsStringAsync(file.uri, { encoding: FileSystem.EncodingType.UTF8 });
+      setAttachedFile({ name: file.name, content: content.slice(0, 100_000) });
+    } catch (e) {
+      Alert.alert('Error', 'Could not read that file. It may not be a text file.');
+    }
+  };
+
+  const removeAttachment = () => setAttachedFile(null);
 
   // ── Node fetch ────────────────────────────────────────────────────────────
   async function askNode(q) {
@@ -231,7 +255,15 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
     }
   };
 
-  const submit = () => submitText(message.trim());
+  const submit = () => {
+    const text = message.trim();
+    if (!text && !attachedFile) return;
+    const q = attachedFile
+      ? `${text}\n\n[Attached file: ${attachedFile.name}]\n\`\`\`\n${attachedFile.content}\n\`\`\``
+      : text;
+    submitText(q);
+    setAttachedFile(null);
+  };
 
   const copyResponse = async () => {
     const text = result?.message || result?.nlResponse
@@ -307,6 +339,20 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
           editable={!loading}
         />
 
+        <View style={s.attachRow}>
+          <TouchableOpacity style={s.attachBtn} onPress={pickAttachment} disabled={loading}>
+            <Text style={s.attachBtnText}>📎 Attach file</Text>
+          </TouchableOpacity>
+          {attachedFile ? (
+            <View style={s.attachChip}>
+              <Text style={s.attachChipText} numberOfLines={1}>{attachedFile.name}</Text>
+              <TouchableOpacity onPress={removeAttachment}>
+                <Text style={s.attachChipRemove}>×</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+        </View>
+
         <View style={s.feeRow}>
           <Text style={s.label}>MAX FEE <Text style={s.labelNote}>(data skills only)</Text></Text>
           <Text style={s.feeValue}>{budget <= 0 ? 'no fee' : `${_fmtPoh(budget)} POH`}</Text>
@@ -321,9 +367,9 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
         ) : null}
 
         <TouchableOpacity
-          style={[s.submitBtn, (loading || !message.trim()) && s.submitBtnDisabled]}
+          style={[s.submitBtn, (loading || (!message.trim() && !attachedFile)) && s.submitBtnDisabled]}
           onPress={submit}
-          disabled={loading || !message.trim()}
+          disabled={loading || (!message.trim() && !attachedFile)}
         >
           {loading ? (
             <View style={s.submitRow}>
@@ -396,6 +442,13 @@ const s = StyleSheet.create({
 
   errorBox:  { backgroundColor: '#1c0a0a', borderRadius: 8, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#ef4444' },
   errorText: { color: '#ef4444', fontSize: 15, fontFamily: 'Iceland_400Regular' },
+
+  attachRow:       { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8, flexWrap: 'wrap' },
+  attachBtn:       { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#2a2a2a', backgroundColor: '#0d0d0d' },
+  attachBtnText:   { color: '#9ca3af', fontSize: 13, fontFamily: 'Iceland_400Regular' },
+  attachChip:      { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: '#111', borderWidth: 1, borderColor: '#222', maxWidth: 200 },
+  attachChipText:  { color: '#22c55e', fontSize: 12, fontFamily: 'monospace', flexShrink: 1 },
+  attachChipRemove: { color: '#f87171', fontSize: 16, fontWeight: '700', paddingHorizontal: 2 },
 
   submitBtn:         { backgroundColor: '#22c55e', padding: 14, borderRadius: 4, alignItems: 'center', marginBottom: 14 },
   submitBtnDisabled: { backgroundColor: '#166534', opacity: 0.7 },
