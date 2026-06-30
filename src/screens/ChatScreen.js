@@ -241,14 +241,14 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
     Alert.alert('Copied', 'Response copied to clipboard');
   };
 
-  const sendFeedback = async (rating) => {
+  const sendFeedback = async (stars) => {
     if (!result?.jobId || result.feedback) return;
     try {
       await fetch(`${activeNodeUrl.replace(/\/$/, '')}/api/jobs/${result.jobId}/feedback`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rating, requesterAddress: selectedAddress }),
+        body: JSON.stringify({ stars, requesterAddress: selectedAddress }),
       });
-      setResult(r => ({ ...r, feedback: rating }));
+      setResult(r => ({ ...r, feedback: stars }));
     } catch { Alert.alert('Error', 'Could not submit feedback.'); }
   };
 
@@ -358,17 +358,16 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
             {isSkillResult && (
               result.feedback ? (
                 <Text style={s.feedbackDone}>
-                  {result.feedback === 'positive' ? '👍 Thanks for your feedback!' : '👎 Noted — miner penalised'}
+                  Thanks! {'★'.repeat(result.feedback)}{'☆'.repeat(5 - result.feedback)}
                 </Text>
               ) : (
                 <View style={s.feedbackRow}>
-                  <Text style={s.feedbackLabel}>Helpful?</Text>
-                  <TouchableOpacity style={s.fbBtn} onPress={() => sendFeedback('positive')}>
-                    <Text style={s.fbBtnText}>👍</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={s.fbBtn} onPress={() => sendFeedback('negative')}>
-                    <Text style={s.fbBtnText}>👎</Text>
-                  </TouchableOpacity>
+                  <Text style={s.feedbackLabel}>Rate this:</Text>
+                  {[1, 2, 3, 4, 5].map(n => (
+                    <TouchableOpacity key={n} style={s.starBtn} onPress={() => sendFeedback(n)}>
+                      <Text style={s.starBtnText}>★</Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
               )
             )}
@@ -424,9 +423,9 @@ const s = StyleSheet.create({
   postRow:     { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#1a1a1a' },
   postTitle:   { color: '#fff', fontSize: 15, fontFamily: 'Iceland_400Regular', marginBottom: 4 },
 
-  feedbackRow:  { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8 },
-  feedbackLabel: { color: '#4b5563', fontSize: 14, fontFamily: 'Iceland_400Regular' },
-  fbBtn:        { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: '#2a2a2a' },
-  fbBtnText:    { fontSize: 16 },
+  feedbackRow:  { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 4 },
+  feedbackLabel: { color: '#4b5563', fontSize: 14, fontFamily: 'Iceland_400Regular', marginRight: 4 },
+  starBtn:      { padding: 2 },
+  starBtnText:  { fontSize: 20, color: '#374151' },
   feedbackDone: { color: '#6b7280', fontSize: 14, fontFamily: 'Iceland_400Regular', marginTop: 12 },
 });
