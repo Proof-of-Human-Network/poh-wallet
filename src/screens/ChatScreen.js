@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { fetchChatSuggestions, fetchHistoryMatch } from '../services/nodeClient';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   ActivityIndicator, StyleSheet, Alert, PanResponder,
@@ -129,8 +130,57 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
   const [result,     setResult]     = useState(null);
   const [error,      setError]      = useState(null);
   const [attachedFile, setAttachedFile] = useState(null); // { name, content }
+  const [suggestions, setSuggestions] = useState([]);
+  const [historyBanner, setHistoryBanner] = useState(null);
+  const suggestTimerRef = useRef(null);
 
   const balance = selectedAddress ? (balances?.[selectedAddress] ?? 0) : 0;
+
+  const loadSuggestions = useCallback(async (q) => {
+    if (!activeNodeUrl || q.length < 2) {
+      setSuggestions([]);
+      setHistoryBanner(null);
+      return;
+    }
+    const data = await fetchChatSuggestions(activeNodeUrl, { q, wallet: selectedAddress });
+    const list = data.suggestions || [];
+    setSuggestions(list);
+    const top = list[0];
+    if (top?.replyPreview && top.prompt?.toLowerCase().includes(q.toLowerCase().slice(0, 6))) {
+      setHistoryBanner(top);
+    } else if (q.length < 6) {
+      setHistoryBanner(null);
+    }
+  }, [activeNodeUrl, selectedAddress]);
+
+  useEffect(() => {
+    clearTimeout(suggestTimerRef.current);
+    const q = message.trim();
+    if (q.length < 2) {
+      setSuggestions([]);
+      setHistoryBanner(null);
+      return;
+    }
+    suggestTimerRef.current = setTimeout(() => loadSuggestions(q), 300);
+    return () => clearTimeout(suggestTimerRef.current);
+  }, [message, loadSuggestions]);
+
+  const applySuggestion = (item) => {
+    setMessage(item.prompt || '');
+    setSuggestions([]);
+    if (item.replyPreview) setHistoryBanner(item);
+  };
+
+  const useChainReply = async () => {
+    const q = message.trim();
+    if (!q || !activeNodeUrl) return;
+    const match = await fetchHistoryMatch(activeNodeUrl, { q, wallet: selectedAddress });
+    if (match?.reply) {
+      setResult({ type: 'chat', message: match.reply, fromChainHistory: true });
+      setHistoryBanner(null);
+      setSuggestions([]);
+    }
+  };
 
   // ── File attachment ───────────────────────────────────────────────────────
   const pickAttachment = async () => {
@@ -169,7 +219,12 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
           res = await fetch(`${base}/chat/ask`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: q, walletAddress: selectedAddress, address: selectedAddress }),
+            body: JSON.stringify({
+              message: q,
+              walletAddress: selectedAddress,
+              address: selectedAddress,
+              requesterAddress: selectedAddress,
+            }),
             signal: ctrl.signal,
           });
         } finally { clearTimeout(timer); }
@@ -195,7 +250,13 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
       const { data: askData, base } = await askNode(q);
 
       if (askData.type === 'chat') {
-        setResult({ type: 'chat', message: askData.message || askData.reply || '(no response)' });
+        setResult({
+          type: 'chat',
+          message: askData.message || askData.reply || '(no response)',
+          fromChainHistory: !!askData.fromChainHistory,
+        });
+        setSuggestions([]);
+        setHistoryBanner(null);
         setStatusText('');
         return;
       }
@@ -339,6 +400,30 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
           editable={!loading}
         />
 
+        {suggestions.length > 0 ? (
+          <View style={s.suggestBox}>
+            {suggestions.map((item, idx) => (
+              <TouchableOpacity key={`${item.jobId || idx}`} style={s.suggestItem} onPress={() => applySuggestion(item)}>
+                <Text style={s.suggestPrompt} numberOfLines={2}>{item.prompt}</Text>
+                {item.replyPreview ? (
+                  <Text style={s.suggestReply} numberOfLines={1}>{item.replyPreview}…</Text>
+                ) : null}
+                {item.fromChain ? <Text style={s.suggestBadge}>on-chain</Text> : null}
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : null}
+
+        {historyBanner?.replyPreview ? (
+          <View style={s.historyBanner}>
+            <Text style={s.historyBannerLabel}>⛓ Similar question on blockchain</Text>
+            <Text style={s.historyBannerReply} numberOfLines={2}>{historyBanner.replyPreview}…</Text>
+            <TouchableOpacity style={s.historyBannerBtn} onPress={useChainReply}>
+              <Text style={s.historyBannerBtnText}>Use cached reply</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         <View style={s.attachRow}>
           <TouchableOpacity style={s.attachBtn} onPress={pickAttachment} disabled={loading}>
             <Text style={s.attachBtnText}>📎 Attach file</Text>
@@ -387,7 +472,7 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
               <Text style={s.resultHeader}>
                 {isSkillResult
                   ? `${result.skillId}${result.tokensUsed ? `  ·  ${result.tokensUsed} tokens` : ''}`
-                  : 'AI'}
+                  : result.fromChainHistory ? 'AI · from chain history' : 'AI'}
               </Text>
               <TouchableOpacity style={s.copyBtn} onPress={copyResponse}>
                 <Text style={s.copyBtnText}>⎘ Copy</Text>
@@ -435,10 +520,28 @@ const s = StyleSheet.create({
 
   input: {
     backgroundColor: '#0d0d0d', color: '#fff', padding: 14,
-    borderRadius: 10, marginBottom: 12, fontSize: 13,
+    borderRadius: 10, marginBottom: 8, fontSize: 13,
     fontFamily: 'Iceland_400Regular', borderWidth: 1, borderColor: '#222',
     minHeight: 72, textAlignVertical: 'top',
   },
+
+  suggestBox: {
+    backgroundColor: '#0a0a0a', borderRadius: 8, borderWidth: 1, borderColor: '#222',
+    marginBottom: 8, overflow: 'hidden',
+  },
+  suggestItem: { padding: 10, borderBottomWidth: 1, borderBottomColor: '#1a1a1a' },
+  suggestPrompt: { color: '#d1d5db', fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 18 },
+  suggestReply: { color: '#6b7280', fontSize: 11, fontStyle: 'italic', marginTop: 2, fontFamily: 'Iceland_400Regular' },
+  suggestBadge: { color: '#22c55e', fontSize: 10, fontFamily: 'monospace', marginTop: 3 },
+
+  historyBanner: {
+    backgroundColor: '#0f1f14', borderRadius: 8, padding: 10, marginBottom: 10,
+    borderWidth: 1, borderColor: '#1e3a2a',
+  },
+  historyBannerLabel: { color: '#4ade80', fontSize: 11, fontFamily: 'Iceland_400Regular', marginBottom: 4 },
+  historyBannerReply: { color: '#9ca3af', fontSize: 12, fontStyle: 'italic', fontFamily: 'Iceland_400Regular', marginBottom: 8 },
+  historyBannerBtn: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 4, borderWidth: 1, borderColor: '#22c55e', backgroundColor: '#166534' },
+  historyBannerBtnText: { color: '#22c55e', fontSize: 11, fontFamily: 'monospace' },
 
   errorBox:  { backgroundColor: '#1c0a0a', borderRadius: 8, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#ef4444' },
   errorText: { color: '#ef4444', fontSize: 15, fontFamily: 'Iceland_400Regular' },

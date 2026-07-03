@@ -30,6 +30,7 @@ import {
 } from './src/services/signing';
 import {
   selectBestNode,
+  discoverPeers,
 } from './src/services/nodeClient';
 import * as Storage from './src/services/storage';
 
@@ -218,6 +219,22 @@ export default function PoHMinerWallet() {
         await Storage.saveNodes(loadedNodes);
       }
 
+      // Auto-discover peers from bootnodes (miner.proofofhuman.ge/peers + fallbacks)
+      // This ensures we get fresh miner nodes when static defaults are down or empty.
+      try {
+        const discovered = await discoverPeers();
+        if (discovered && discovered.length > 0) {
+          const existingUrls = new Set(loadedNodes.map(n => n.url));
+          const fresh = discovered.filter(d => d.url && !existingUrls.has(d.url));
+          if (fresh.length > 0) {
+            loadedNodes = [...loadedNodes, ...fresh];
+            await Storage.saveNodes(loadedNodes);
+          }
+        }
+      } catch (e) {
+        console.log('Peer discovery on load skipped:', e?.message);
+      }
+
       setNodes(loadedNodes);
 
       if (activeUrl) {
@@ -336,11 +353,30 @@ export default function PoHMinerWallet() {
     const urlToTry = tried.size === 0 ? activeNodeUrl : null;
 
     // Pick next candidate: active node first, then untried peers by latency
-    const candidate = urlToTry ||
+    let candidate = urlToTry ||
       [...nodes]
         .sort((a, b) => (a.lastLatency || 9999) - (b.lastLatency || 9999))
         .map(n => n.url)
         .find(u => !tried.has(u));
+
+    if (!candidate) {
+      // Last resort: discover fresh peers from bootnodes (as required)
+      try {
+        const discovered = await discoverPeers();
+        if (discovered.length) {
+          const currentUrls = new Set(nodes.map(n => n.url));
+          const fresh = discovered.filter(d => d.url && !currentUrls.has(d.url) && !tried.has(d.url));
+          if (fresh.length) {
+            const updated = [...nodes, ...fresh];
+            setNodes(updated);
+            await Storage.saveNodes(updated).catch(() => {});
+            // pick the first fresh as candidate
+            candidate = fresh[0].url;
+            // update tried won't have it yet
+          }
+        }
+      } catch {}
+    }
 
     if (!candidate) throw new Error('All nodes unreachable');
 
@@ -446,6 +482,57 @@ export default function PoHMinerWallet() {
       setPohUsdRate(bestRate);
     } catch { /* network error — leave rate as-is */ }
   }
+
+  // Discover fresh peers from bootnodes (miner.proofofhuman.ge/peers first, then fallbacks)
+  // Adds new nodes to the list and may switch to the best one.
+  const refreshPeerDiscovery = async () => {
+    setLoading(true);
+    try {
+      const discovered = await discoverPeers();
+      if (discovered.length > 0) {
+        const currentUrls = new Set(nodes.map(n => n.url));
+        const toAdd = discovered.filter(d => d.url && !currentUrls.has(d.url));
+        if (toAdd.length > 0) {
+          const updated = [...nodes, ...toAdd];
+          setNodes(updated);
+          await Storage.saveNodes(updated);
+
+          // Re-evaluate best node including newly discovered peers
+          const best = await selectBestNode(updated);
+          if (best && best.url !== activeNodeUrl) {
+            setActiveNodeUrl(best.url);
+            await Storage.saveActiveNodeUrl(best.url);
+          }
+
+          if (Platform.OS === 'web') {
+            alert(`Discovered ${toAdd.length} new peer node(s) from bootnodes.`);
+          } else {
+            Alert.alert('Peer Discovery', `Added ${toAdd.length} new peer node(s).`);
+          }
+        } else {
+          if (Platform.OS === 'web') {
+            alert('No new peers found — you already have the discovered bootnode peers.');
+          } else {
+            Alert.alert('Peers', 'No new peers (already up to date).');
+          }
+        }
+      } else {
+        if (Platform.OS === 'web') {
+          alert('No peers discovered from any bootnode (/peers or IPFS).');
+        } else {
+          Alert.alert('Peers', 'No peers discovered. Check your connection or add nodes manually.');
+        }
+      }
+    } catch (e) {
+      const msg = e?.message || 'Discovery failed.';
+      if (Platform.OS === 'web') {
+        alert('Peer discovery error: ' + msg);
+      } else {
+        Alert.alert('Discovery Error', msg);
+      }
+    }
+    setLoading(false);
+  };
 
   async function refreshAll(silent = false) {
     if (!selectedAddress) return;
@@ -842,6 +929,7 @@ export default function PoHMinerWallet() {
   const send = async () => {
     const amount = parseFloat(sendAmount);
     const to = sendTo.trim();
+    const fee = 0;
 
     if (!to || !amount || amount <= 0) {
       Alert.alert(t('error'), t('send.error_invalid'));
@@ -851,7 +939,7 @@ export default function PoHMinerWallet() {
       Alert.alert(t('send.no_wallet'));
       return;
     }
-    if (amount > currentBalance) {
+    if (amount + fee > currentBalance) {
       Alert.alert(t('error'), t('send.insufficient'));
       return;
     }
@@ -887,7 +975,7 @@ export default function PoHMinerWallet() {
       const nonce = Math.max(nonceData.nonce || 0, nonceData.pendingNonce || 0) + 1;
 
       // Build and sign the transaction (signingPublicKey required by node's verify())
-      const signedTx = await buildSignedTransaction({ from: selectedAddress, to, amount, fee: 0, nonce, secretKey, signingPublicKey });
+      const signedTx = await buildSignedTransaction({ from: selectedAddress, to, amount, fee, nonce, secretKey, signingPublicKey });
 
       // Submit to mempool — node validates signature + nonce + balance, gossips to peers
       const res = await callNodeApi('/api/tx/submit', {
@@ -1100,7 +1188,7 @@ export default function PoHMinerWallet() {
   }
 
   if (currentScreen === 'send') {
-    const fee = 0.001;
+    const fee = 0;  // actual fee in buildSignedTransaction and tx is 0; node may charge separately or 0
     const amountNum = parseFloat(sendAmount) || 0;
     return (
       <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
@@ -1529,6 +1617,18 @@ export default function PoHMinerWallet() {
               }}>
                 <Text style={styles.primaryBtnText}>{t('settings.add_node')}</Text>
               </TouchableOpacity>
+
+              {/* Auto discovery from bootnodes: tries miner.proofofhuman.ge/peers first */}
+              <TouchableOpacity
+                style={[styles.primaryBtn, { backgroundColor: '#0a7', marginTop: 8 }]}
+                onPress={refreshPeerDiscovery}
+                disabled={loading}
+              >
+                <Text style={styles.primaryBtnText}>{t('settings.discover_peers')}</Text>
+              </TouchableOpacity>
+              <Text style={{ color: '#4b5563', fontSize: 11, marginTop: 4, fontFamily: 'Iceland_400Regular' }}>
+                Checks /peers on miner.proofofhuman.ge + others; falls back to IPFS.
+              </Text>
             </>
           ) : settingsTab === 'language' ? (
             <>

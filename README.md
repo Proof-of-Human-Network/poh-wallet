@@ -9,6 +9,7 @@ React Native mobile wallet for the PoH Miner Network. Connects to any running mi
 - **Send / Receive** — real on-chain signed transfers with QR scan
 - **Transaction history** — node history merged with local pending txs
 - **AI Screen** — submit wallet addresses for human/AI identity verification; displays verdict, confidence, sanctions check (OFAC, EU, UK), and full PoH profile
+- **Ask AI (Chat)** — chat with the miner network; autocomplete from on-chain job history (`/api/search/suggest`) and cached replies for repetitive questions (`/api/search/history-match`)
 - **Multi-node failover** — connects to the fastest available node; auto-switches on failure
 - **IPFS peer discovery** — when no node is configured or all nodes are offline, discovers active miners from the IPFS peer directory published by the bootnode
 - **16 languages** — full live i18n (English, French, Chinese, Spanish, Hindi, Russian, Arabic, and more)
@@ -46,11 +47,19 @@ eas build -p android --profile production
 
 The wallet communicates with any `poh-miner-network` node over HTTP.
 
-**Default node:** `https://miner.proofofhuman.ge`
+**Discovery:** On load and on failure, the wallet automatically queries bootnodes for peers:
+- Primary: `https://miner.proofofhuman.ge/peers`
+- Then other bootnodes (`bootnode.proofofhuman.ge`, `poh.assetux.com`)
+- Falls back to `/ipfs/latest` + IPFS if needed.
+- Discovered peers (with `host` + `walletApiPort`) are added as `http://...` nodes.
 
-To add your own node: **Settings → Nodes → Add** (e.g. `http://192.168.1.100:3456`).
+**Defaults:** `https://bootnode.proofofhuman.ge`, `https://miner.proofofhuman.ge`
 
-The wallet tries all configured nodes in parallel and connects to whichever responds first. If all fail, it falls back to IPFS peer discovery.
+To add your own: **Settings → Nodes → Add** (e.g. `http://192.168.1.100:3456`).
+
+Or tap **"Discover peers from bootnodes"**.
+
+The wallet pings nodes by latency and fails over automatically.
 
 ### Node API used by the wallet
 
@@ -126,8 +135,10 @@ Transfers are signed `PoHTransaction` objects:
   "timestamp": 1234567890,
   "txHash": "sha256...",
   "signature": "base64...",
-  "signingPublicKey": "-----BEGIN PUBLIC KEY-----..."
+  "signingPublicKey": "base64raw32bytes..."
 }
 ```
 
 `nonce` is the sender's transaction count — prevents replay attacks. The miner node validates `nonce === account.nonce + 1` before applying. Amounts are in **μPOH** (1 POH = 1,000,000,000 μPOH).
+
+Wallet keys: private key hex is entropy; address + signing key derived deterministically. Address is canonically `poh + sha256(rawBase64Ed25519Pub).slice(0,40)` to allow register-key + signed submit.
