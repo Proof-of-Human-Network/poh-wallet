@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { fetchChatSuggestions, fetchHistoryMatch } from '../services/nodeClient';
+import { deriveSigningKeypair, signData, buildJobPaymentTx } from '../services/signing';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   ActivityIndicator, StyleSheet, Alert, PanResponder,
@@ -11,11 +12,25 @@ import * as FileSystem from 'expo-file-system';
 
 const MAX_ATTACH_BYTES = 100 * 1024;
 
-// ── Log budget slider ──────────────────────────────────────────────────────────
-const LOG_MIN = 0.01, LOG_MAX = 200, LOG_STEPS = 200;
-const _stepToPoh = s => s <= 0 ? 0 : LOG_MIN * Math.pow(LOG_MAX / LOG_MIN, (s - 1) / (LOG_STEPS - 1));
-const _pohToStep = v => v <= 0 ? 0 : Math.round(1 + (LOG_STEPS - 1) * Math.log(v / LOG_MIN) / Math.log(LOG_MAX / LOG_MIN));
-const _fmtPoh = p => p < 0.1 ? p.toFixed(3) : p < 10 ? p.toFixed(2) : p < 100 ? p.toFixed(1) : Math.round(p).toString();
+// ── Log fee slider: 1 μPOH (1e-9 POH) → 1 POH, logarithmic ──────────────────────
+const LOG_MIN = 0.000000001, LOG_MAX = 1, LOG_STEPS = 200;
+const _stepToPoh = s => s <= 0 ? LOG_MIN : LOG_MIN * Math.pow(LOG_MAX / LOG_MIN, (s - 1) / (LOG_STEPS - 1));
+const _pohToStep = v => v <= LOG_MIN ? 1 : Math.round(1 + (LOG_STEPS - 1) * Math.log(v / LOG_MIN) / Math.log(LOG_MAX / LOG_MIN));
+// Value at a fraction [0,1] of the log range — used by the preset marks.
+const _pctToPoh = pct => LOG_MIN * Math.pow(LOG_MAX / LOG_MIN, pct);
+// Preset marks: default 0%, low 25%, high 60%, max 100%.
+const FEE_PRESETS = [
+  { label: 'Default', pct: 0.00 },
+  { label: 'Low',     pct: 0.25 },
+  { label: 'High',    pct: 0.60 },
+  { label: 'Max',     pct: 1.00 },
+];
+const _fmtPoh = p => {
+  if (p <= 0) return '0';
+  if (p < 0.001) return Math.round(p * 1e9).toLocaleString() + ' μPOH';
+  if (p < 1)     return p.toPrecision(2) + ' POH';
+  return (p < 10 ? p.toFixed(2) : Math.round(p).toString()) + ' POH';
+};
 
 function LogSlider({ value, onChange, disabled }) {
   const [trackWidth, setTrackWidth] = useState(1);
@@ -122,9 +137,9 @@ const POLL_INTERVAL_MS = 2000;
 const POLL_TIMEOUT_MS  = 120_000;
 
 // ── Main screen ───────────────────────────────────────────────────────────────
-export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress, balances }) {
+export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress, balances, getPrivateKey }) {
   const [message,    setMessage]    = useState('');
-  const [budget,     setBudget]     = useState(0);
+  const [budget,     setBudget]     = useState(_pctToPoh(0)); // default = 0% preset (1 μPOH)
   const [loading,    setLoading]    = useState(false);
   const [statusText, setStatusText] = useState('');
   const [result,     setResult]     = useState(null);
@@ -271,14 +286,50 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
       if (!selectedAddress) { setError('Select a wallet to pay the skill fee.'); return; }
       if (budget > balance)  { setError(`Insufficient balance: ${balance.toFixed(2)} POH available.`); return; }
 
+      // Fee-required job types need a signed payment proof (paymentTx) bound to
+      // jobId + miner + amount + nonce — the node rejects them with 402 otherwise.
+      setStatusText('Signing fee payment...');
+      const privateKeyHex = getPrivateKey ? await getPrivateKey(selectedAddress) : null;
+      if (!privateKeyHex) { setError('Private key not found for this wallet.'); setLoading(false); return; }
+      const { secretKey, signingPublicKey } = await deriveSigningKeypair(privateKeyHex);
+
+      // Register signing key (idempotent) so the node can verify the proof
+      try {
+        await fetch(`${base}/api/wallet/register-key`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ address: selectedAddress, signingPublicKey, proof: signData(selectedAddress, secretKey) }),
+        });
+      } catch { /* non-fatal — submit will fail with a clear error if key missing */ }
+
+      const infoRes = await fetch(`${base}/api/miner/info`);
+      const info = await infoRes.json();
+      if (!info.minerAddress) throw new Error('Could not fetch miner address for payment proof.');
+
+      const nonceRes = await fetch(`${base}/api/wallet/nonce?address=${encodeURIComponent(selectedAddress)}`);
+      const nonceData = await nonceRes.json();
+      if (nonceData.error) throw new Error(nonceData.error);
+
+      const clientJobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const paymentTx = await buildJobPaymentTx({
+        jobId: clientJobId,
+        requesterAddress: selectedAddress,
+        minerAddress: info.minerAddress,
+        amount: maxBudget,
+        nonce: nonceData.nonce || 0,
+        secretKey,
+      });
+
       setStatusText('Submitting job...');
       const jobRes = await fetch(`${base}/job`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          id: clientJobId,
           type: 'skill', skillId: askData.skillId,
           payload: { ...(askData.input || {}), question: q },
           maxBudget, requesterAddress: selectedAddress,
+          paymentTx,
         }),
       });
       const jobRef = await jobRes.json();
@@ -440,9 +491,25 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
 
         <View style={s.feeRow}>
           <Text style={s.label}>MAX FEE <Text style={s.labelNote}>(data skills only)</Text></Text>
-          <Text style={s.feeValue}>{budget <= 0 ? 'no fee' : `${_fmtPoh(budget)} POH`}</Text>
+          <Text style={s.feeValue}>{_fmtPoh(budget)}</Text>
         </View>
         <LogSlider value={budget} onChange={setBudget} disabled={loading} />
+        <View style={s.presetRow}>
+          {FEE_PRESETS.map(p => {
+            const pv = _pctToPoh(p.pct);
+            const active = Math.abs(_pohToStep(budget) - _pohToStep(pv)) <= 1;
+            return (
+              <TouchableOpacity
+                key={p.label}
+                style={[s.presetBtn, active && s.presetBtnActive]}
+                onPress={() => !loading && setBudget(pv)}
+                disabled={loading}
+              >
+                <Text style={[s.presetText, active && s.presetTextActive]}>{p.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
         <Text style={s.feeNote}>
           Balance: {balance.toFixed(2)} POH · fee only charged when a data skill is used
         </Text>
@@ -517,6 +584,11 @@ const s = StyleSheet.create({
   feeRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   feeValue:  { color: '#22c55e', fontSize: 15, fontFamily: 'Iceland_400Regular' },
   feeNote:   { color: '#374151', fontSize: 13, fontFamily: 'Iceland_400Regular', marginBottom: 12, marginTop: 2 },
+  presetRow:      { flexDirection: 'row', justifyContent: 'space-between', gap: 6, marginTop: 8 },
+  presetBtn:      { flex: 1, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#1f2937', alignItems: 'center', backgroundColor: '#0a0a0a' },
+  presetBtnActive:{ borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.12)' },
+  presetText:     { color: '#6b7280', fontSize: 12, letterSpacing: 1, fontFamily: 'Iceland_400Regular' },
+  presetTextActive:{ color: '#22c55e' },
 
   input: {
     backgroundColor: '#0d0d0d', color: '#fff', padding: 14,
