@@ -131,11 +131,14 @@ export async function fetchReferralStats(nodeUrl, address) {
   return res.json();
 }
 
-export async function applyReferralCode(nodeUrl, address, code) {
+export async function applyReferralCode(nodeUrl, address, code, privateKeyHex) {
+  const { signingPublicKey, secretKey } = await getSigningKeys(privateKeyHex);
+  await registerSigningKey(nodeUrl, address, signingPublicKey, secretKey);
+  const auth = await buildAuth(address, signingPublicKey, secretKey, { action: 'apply-referral', code });
   const res = await fetch(`${nodeUrl}/api/p2p/referral/apply`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ address, code }),
+    body: JSON.stringify({ ...auth, code }),
   });
   return res.json();
 }

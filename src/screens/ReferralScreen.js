@@ -9,7 +9,7 @@ function formatPOH(uPOH) {
   return (uPOH / 1e9).toLocaleString(undefined, { maximumFractionDigits: 4 });
 }
 
-export default function ReferralScreen({ selectedAddress, activeNodeUrl, onNavigate }) {
+export default function ReferralScreen({ selectedAddress, activeNodeUrl, getPrivateKey, onNavigate }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [referCode, setReferCode] = useState('');
@@ -38,7 +38,9 @@ export default function ReferralScreen({ selectedAddress, activeNodeUrl, onNavig
     if (!selectedAddress) return Alert.alert('No wallet selected');
     setApplying(true);
     try {
-      const result = await applyReferralCode(activeNodeUrl, selectedAddress, referCode.trim().toUpperCase());
+      const privateKey = await getPrivateKey(selectedAddress);
+      if (!privateKey) return Alert.alert('Error', 'Private key not found. Import your wallet first.');
+      const result = await applyReferralCode(activeNodeUrl, selectedAddress, referCode.trim().toUpperCase(), privateKey);
       if (result.error) {
         Alert.alert('Error', result.error);
       } else {

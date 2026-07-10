@@ -72,7 +72,7 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
 
       // Apply referral code if provided (best-effort, non-blocking)
       if (referralCode.trim()) {
-        await applyReferralCode(activeNodeUrl, selectedAddress, referralCode.trim().toUpperCase()).catch(() => {});
+        await applyReferralCode(activeNodeUrl, selectedAddress, referralCode.trim().toUpperCase(), privateKey).catch(() => {});
       }
 
       const pohAmountMicro = Math.round(poh * POH_DECIMALS);
