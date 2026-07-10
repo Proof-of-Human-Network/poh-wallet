@@ -1,8 +1,19 @@
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { STORAGE_KEYS } from '../constants';
 
 /** Simple wrappers around AsyncStorage + SecureStore */
+
+async function isSecureStoreAvailable() {
+  try {
+    // SecureStore is unavailable on web and some environments
+    if (Platform.OS === 'web') return false;
+    return await SecureStore.isAvailableAsync();
+  } catch {
+    return false;
+  }
+}
 
 export async function loadItem(key, defaultValue = null) {
   if (typeof key !== 'string' || !key) return defaultValue;
@@ -35,11 +46,35 @@ export async function saveString(key, value) {
 
 // Private keys (sensitive)
 export async function storePrivateKey(address, privHex) {
-  await SecureStore.setItemAsync(`poh_pk_${address}`, privHex);
+  const key = `poh_pk_${address}`;
+  const available = await isSecureStoreAvailable();
+  if (available) {
+    await SecureStore.setItemAsync(key, privHex);
+  } else {
+    await AsyncStorage.setItem(key, privHex);
+  }
 }
 
 export async function getPrivateKey(address) {
-  return SecureStore.getItemAsync(`poh_pk_${address}`);
+  const key = `poh_pk_${address}`;
+  const available = await isSecureStoreAvailable();
+  if (available) {
+    return SecureStore.getItemAsync(key);
+  } else {
+    return AsyncStorage.getItem(key);
+  }
+}
+
+export async function deletePrivateKey(address) {
+  const key = `poh_pk_${address}`;
+  const available = await isSecureStoreAvailable();
+  try {
+    if (available) {
+      await SecureStore.deleteItemAsync(key);
+    } else {
+      await AsyncStorage.removeItem(key);
+    }
+  } catch {}
 }
 
 // High-level wallet persistence helpers

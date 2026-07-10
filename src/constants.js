@@ -12,16 +12,12 @@ export const STORAGE_KEYS = {
 // Default public / bootstrap wallet RPC nodes (used when the user has none configured)
 export const DEFAULT_WALLET_NODES = [
   { url: 'https://miner.proofofhuman.ge', name: 'Miner (primary)' },
-  { url: 'https://bootnode.proofofhuman.ge', name: 'Bootnode' },
-  { url: 'https://poh.assetux.com', name: 'Assetux' },
 ];
 
 // Bootnodes used for peer discovery via /peers (and fallback /ipfs/latest).
 // Order: primary is miner.proofofhuman.ge, then others.
 export const DEFAULT_BOOTNODES = [
   'https://miner.proofofhuman.ge',
-  'https://bootnode.proofofhuman.ge',
-  'https://poh.assetux.com',
 ];
 
 // Supported languages for the wallet (top 20 + additional requested languages)

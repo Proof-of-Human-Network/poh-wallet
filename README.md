@@ -49,11 +49,11 @@ The wallet communicates with any `poh-miner-network` node over HTTP.
 
 **Discovery:** On load and on failure, the wallet automatically queries bootnodes for peers:
 - Primary: `https://miner.proofofhuman.ge/peers`
-- Then other bootnodes (`bootnode.proofofhuman.ge`, `poh.assetux.com`)
+- Then community bootnodes
 - Falls back to `/ipfs/latest` + IPFS if needed.
 - Discovered peers (with `host` + `walletApiPort`) are added as `http://...` nodes.
 
-**Defaults:** `https://bootnode.proofofhuman.ge`, `https://miner.proofofhuman.ge`
+**Defaults:** `https://miner.proofofhuman.ge`
 
 To add your own: **Settings → Nodes → Add** (e.g. `http://192.168.1.100:3456`).
 

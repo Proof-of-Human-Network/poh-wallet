@@ -50,6 +50,26 @@ export function signData(data, secretKey) {
 }
 
 /**
+ * Build a signed job-payment proof for fee-required jobs (type 'skill'/'compute').
+ *
+ * txHash must match the node's computeJobPaymentHash():
+ *   sha256(JSON.stringify({ jobId, requesterAddress, minerAddress, amount, nonce }))
+ * — field order matters. `nonce` is the CONFIRMED nonce from /api/wallet/nonce
+ * (not +1 — the node checks against walletManager.getNonce()).
+ * `amount` is in μPOH and must equal the job's maxBudget.
+ */
+export async function buildJobPaymentTx({ jobId, requesterAddress, minerAddress, amount, nonce, secretKey }) {
+  const payload = JSON.stringify({ jobId, requesterAddress, minerAddress, amount, nonce });
+  const txHash = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    payload,
+    { encoding: Crypto.CryptoEncoding.HEX }
+  );
+  const signature = signData(txHash, secretKey);
+  return { txHash, signature };
+}
+
+/**
  * Build a signed PoHTransaction ready for POST /api/tx/submit.
  *
  * amount is in display POH units (e.g. 1.5); converted internally to μPOH.

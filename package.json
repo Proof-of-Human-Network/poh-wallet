@@ -1,6 +1,6 @@
 {
   "name": "poh-miner-wallet",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
@@ -21,7 +21,6 @@
     "@expo-google-fonts/iceland": "^0.2.3",
     "@expo/metro-runtime": "~3.2.3",
     "@react-native-async-storage/async-storage": "1.23.1",
-    "@react-native-voice/voice": "^3.2.4",
     "expo": "~51.0.0",
     "expo-av": "~14.0.7",
     "expo-camera": "~15.0.16",

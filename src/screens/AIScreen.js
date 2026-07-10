@@ -7,23 +7,29 @@ import * as Clipboard from 'expo-clipboard';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 
 export default function AIScreen({ t, wallets = [], selectedAddress, balances = {}, setSelectedAddress, saveSelectedAddress, activeNodeUrl, nodes = [] }) {
-  // Try activeNodeUrl first, then other nodes by latency, then nothing
-  async function callApi(path, options = {}, _tried = null) {
-    const tried = _tried || new Set();
-    const candidate = (tried.size === 0 && activeNodeUrl && !tried.has(activeNodeUrl))
-      ? activeNodeUrl
-      : [...nodes]
-          .sort((a, b) => (a.lastLatency || 9999) - (b.lastLatency || 9999))
-          .map(n => n.url)
-          .find(u => u && !tried.has(u));
-    if (!candidate) throw new Error('No node reachable');
-    tried.add(candidate);
-    try {
-      const res = await fetch(`${candidate.replace(/\/$/, '')}${path}`, options);
-      return res;
-    } catch {
-      return callApi(path, options, tried);
+  // Try activeNodeUrl first, then other nodes by latency, then nothing.
+  // Loop (not deep recursion) to avoid stack overflow.
+  async function callApi(path, options = {}) {
+    const tried = new Set();
+    const MAX_ATTEMPTS = 6;
+
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      const candidate = (attempt === 0 && activeNodeUrl && !tried.has(activeNodeUrl))
+        ? activeNodeUrl
+        : [...nodes]
+            .sort((a, b) => (a.lastLatency || 9999) - (b.lastLatency || 9999))
+            .map(n => n.url)
+            .find(u => u && !tried.has(u));
+      if (!candidate) throw new Error('No node reachable');
+      tried.add(candidate);
+      try {
+        const res = await fetch(`${candidate.replace(/\/$/, '')}${path}`, options);
+        return res;
+      } catch {
+        if (attempt === MAX_ATTEMPTS - 1) throw new Error('No node reachable');
+      }
     }
+    throw new Error('No node reachable');
   }
   // --- Connected wallet (uses app state) ---
   const connectedAddr = selectedAddress;

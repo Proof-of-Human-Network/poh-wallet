@@ -5,7 +5,6 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 import * as Notifications from 'expo-notifications';
 import * as SplashScreen from 'expo-splash-screen';
@@ -154,6 +153,12 @@ export default function PoHMinerWallet() {
   const prevBalanceRef = useRef(0);
   const [pohUsdRate, setPohUsdRate] = useState(null);
 
+  // Refs to avoid stale closures in async node-calling functions
+  const activeNodeUrlRef = useRef(activeNodeUrl);
+  const nodesRef = useRef(nodes);
+  useEffect(() => { activeNodeUrlRef.current = activeNodeUrl; }, [activeNodeUrl]);
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+
   const selectedWallet = wallets.find(w => w.address === selectedAddress) || wallets[0] || null;
   const currentBalance = selectedAddress ? (balances[selectedAddress] || 0) : 0;
 
@@ -261,25 +266,9 @@ export default function PoHMinerWallet() {
     }
   }
 
-  // Store private key securely
-  // On web we fall back to AsyncStorage (less secure, only for development)
-  async function storePrivateKey(address, privHex) {
-    const key = `poh_pk_${address}`;
-    if (Platform.OS === 'web') {
-      await AsyncStorage.setItem(key, privHex);
-    } else {
-      await SecureStore.setItemAsync(key, privHex);
-    }
-  }
-
-  async function getPrivateKey(address) {
-    const key = `poh_pk_${address}`;
-    if (Platform.OS === 'web') {
-      return AsyncStorage.getItem(key);
-    } else {
-      return SecureStore.getItemAsync(key);
-    }
-  }
+  // Private key storage now delegates to src/services/storage (handles web + native)
+  const storePrivateKey = Storage.storePrivateKey;
+  const getPrivateKey = Storage.getPrivateKey;
 
   // === Danger: Clear all local wallet data ===
   async function clearAllLocalData() {
@@ -291,13 +280,8 @@ export default function PoHMinerWallet() {
       if (walletsStr) {
         const wallets = JSON.parse(walletsStr);
         for (const w of wallets) {
-          const key = `poh_pk_${w.address}`;
           try {
-            if (Platform.OS === 'web') {
-              await AsyncStorage.removeItem(key);
-            } else {
-              await SecureStore.deleteItemAsync(key);
-            }
+            await Storage.deletePrivateKey(w.address);
             console.log('[DangerZone] Deleted key for', w.address);
           } catch (e) {
             console.warn('[DangerZone] Failed to delete key for', w.address, e);
@@ -348,50 +332,62 @@ export default function PoHMinerWallet() {
 
   // ===== Node communication with automatic peer failover =====
   // Tries the active node first, then each remaining peer in latency order.
-  async function callNodeApi(path, options = {}, _tried = null) {
-    const tried = _tried || new Set();
-    const urlToTry = tried.size === 0 ? activeNodeUrl : null;
+  // Uses loop (not recursion) to avoid stack overflow on repeated failures.
+  async function callNodeApi(path, options = {}) {
+    const tried = new Set();
+    const MAX_ATTEMPTS = 6;
 
-    // Pick next candidate: active node first, then untried peers by latency
-    let candidate = urlToTry ||
-      [...nodes]
-        .sort((a, b) => (a.lastLatency || 9999) - (b.lastLatency || 9999))
-        .map(n => n.url)
-        .find(u => !tried.has(u));
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      const currentActive = activeNodeUrlRef.current;
+      const currentNodes = nodesRef.current || nodes;
+      // Pick next candidate: active node first (on first try), then untried peers by latency
+      let candidate = (attempt === 0 && currentActive && !tried.has(currentActive))
+        ? currentActive
+        : [...currentNodes]
+            .sort((a, b) => (a.lastLatency || 9999) - (b.lastLatency || 9999))
+            .map(n => n.url)
+            .find(u => u && !tried.has(u));
 
-    if (!candidate) {
-      // Last resort: discover fresh peers from bootnodes (as required)
-      try {
-        const discovered = await discoverPeers();
-        if (discovered.length) {
-          const currentUrls = new Set(nodes.map(n => n.url));
-          const fresh = discovered.filter(d => d.url && !currentUrls.has(d.url) && !tried.has(d.url));
-          if (fresh.length) {
-            const updated = [...nodes, ...fresh];
-            setNodes(updated);
-            await Storage.saveNodes(updated).catch(() => {});
-            // pick the first fresh as candidate
-            candidate = fresh[0].url;
-            // update tried won't have it yet
+      if (!candidate) {
+        // Last resort: discover fresh peers from bootnodes
+        try {
+          const discovered = await discoverPeers();
+          if (discovered.length) {
+            const currNodes = nodesRef.current || nodes;
+            const currentUrls = new Set(currNodes.map(n => n.url));
+            const fresh = discovered.filter(d => d.url && !currentUrls.has(d.url) && !tried.has(d.url));
+            if (fresh.length) {
+              const updated = [...currNodes, ...fresh];
+              setNodes(updated);
+              await Storage.saveNodes(updated).catch(() => {});
+              candidate = fresh[0].url;
+            }
           }
-        }
-      } catch {}
-    }
-
-    if (!candidate) throw new Error('All nodes unreachable');
-
-    tried.add(candidate);
-    try {
-      const res = await fetch(`${candidate.replace(/\/$/, '')}${path}`, options);
-      // If we failed over to a different node, persist the switch
-      if (candidate !== activeNodeUrl) {
-        setActiveNodeUrl(candidate);
-        await Storage.saveActiveNodeUrl(candidate);
+        } catch {}
       }
-      return res;
-    } catch {
-      return callNodeApi(path, options, tried);
+
+      if (!candidate) {
+        throw new Error('All nodes unreachable');
+      }
+
+      tried.add(candidate);
+      try {
+        const res = await fetch(`${candidate.replace(/\/$/, '')}${path}`, options);
+        // If we failed over to a different node, persist the switch
+        const currentActive = activeNodeUrlRef.current;
+        if (candidate !== currentActive) {
+          setActiveNodeUrl(candidate);
+          await Storage.saveActiveNodeUrl(candidate).catch(() => {});
+        }
+        return res;
+      } catch (e) {
+        // try next
+        if (attempt === MAX_ATTEMPTS - 1) {
+          throw e;
+        }
+      }
     }
+    throw new Error('All nodes unreachable');
   }
 
   async function fetchBalance(address, silent = false) {
@@ -400,6 +396,7 @@ export default function PoHMinerWallet() {
     if (!silent) setLoading(true);
     try {
       const res = await callNodeApi(`/api/wallet/balance?address=${address}`);
+      if (!res.ok) throw new Error('balance http ' + res.status);
       const data = await res.json();
       if (typeof data.balance === 'number') {
         const oldBal = balances[address] || 0;
@@ -438,6 +435,7 @@ export default function PoHMinerWallet() {
     if (!activeNodeUrl || !address) return;
     try {
       const res = await callNodeApi(`/api/wallet/history?address=${encodeURIComponent(address)}&limit=50`);
+      if (!res.ok) throw new Error('history http ' + res.status);
       const data = await res.json();
       // History entries: { height, delta (μPOH, +recv/-sent), txHash, ts, label }
       const nodeTxs = (Array.isArray(data.entries) ? data.entries : []).map(e => ({
@@ -464,11 +462,12 @@ export default function PoHMinerWallet() {
   }
 
   async function fetchBestPohRate() {
-    if (!activeNodeUrl) return;
+    const node = activeNodeUrlRef.current || activeNodeUrl;
+    if (!node) return;
     try {
       let bestRate = null;
       for (const cur of ['USDT-ERC20', 'USDC-ERC20', 'USDT-TRC20']) {
-        const res = await fetch(`${activeNodeUrl.replace(/\/$/, '')}/api/p2p/orders?side=sell&quoteCurrency=${cur}&status=open`);
+        const res = await fetch(`${node.replace(/\/$/, '')}/api/p2p/orders?side=sell&quoteCurrency=${cur}&status=open`);
         if (!res.ok) continue;
         const data = await res.json();
         const orders = data.orders || [];
@@ -489,17 +488,19 @@ export default function PoHMinerWallet() {
     setLoading(true);
     try {
       const discovered = await discoverPeers();
+      const currNodes = nodesRef.current || nodes;
+      const currActive = activeNodeUrlRef.current || activeNodeUrl;
       if (discovered.length > 0) {
-        const currentUrls = new Set(nodes.map(n => n.url));
+        const currentUrls = new Set(currNodes.map(n => n.url));
         const toAdd = discovered.filter(d => d.url && !currentUrls.has(d.url));
         if (toAdd.length > 0) {
-          const updated = [...nodes, ...toAdd];
+          const updated = [...currNodes, ...toAdd];
           setNodes(updated);
           await Storage.saveNodes(updated);
 
           // Re-evaluate best node including newly discovered peers
           const best = await selectBestNode(updated);
-          if (best && best.url !== activeNodeUrl) {
+          if (best && best.url !== currActive) {
             setActiveNodeUrl(best.url);
             await Storage.saveActiveNodeUrl(best.url);
           }
@@ -597,23 +598,31 @@ export default function PoHMinerWallet() {
     }
   }, [selectedAddress]);
 
-  // On startup: select best node by latency
+  const nodesKey = nodes.map(n => n.url).sort().join('|');
+  // Select best node by latency whenever the set of node URLs changes
   useEffect(() => {
     if (nodes.length > 0) {
       selectBestNode(nodes).then(async (best) => {
-        if (best && best.url !== activeNodeUrl) {
+        if (!best) return;
+        if (best.url !== activeNodeUrl) {
           setActiveNodeUrl(best.url);
-          await Storage.saveActiveNodeUrl(best.url);
-          // Update nodes with latest latencies
-          const updatedNodes = nodes.map(n =>
-            n.url === best.url ? { ...n, lastLatency: best.lastLatency } : n
-          );
-          setNodes(updatedNodes);
-          await Storage.saveNodes(updatedNodes);
+          await Storage.saveActiveNodeUrl(best.url).catch(() => {});
         }
-      });
+        // Update latency on the chosen node only (avoid unnecessary full list churn)
+        setNodes(prev => {
+          const idx = prev.findIndex(n => n.url === best.url);
+          if (idx >= 0 && prev[idx].lastLatency !== best.lastLatency) {
+            const copy = [...prev];
+            copy[idx] = { ...copy[idx], lastLatency: best.lastLatency };
+            Storage.saveNodes(copy).catch(() => {});
+            return copy;
+          }
+          return prev;
+        });
+      }).catch(() => {});
     }
-  }, [nodes.length]); // run when nodes list is loaded
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodesKey]); // only when urls change
 
   // Hide splash as soon as fonts are ready — don't wait for onLayout
   useEffect(() => {
@@ -624,6 +633,11 @@ export default function PoHMinerWallet() {
 
   // onLayout kept for screens that still reference it, but it's a no-op now
   const onLayoutRootView = useCallback(() => {}, []);
+
+  const handleTabPress = (key) => {
+    if (key === 'p2p') { setP2pScreen('p2p'); setP2pParams({}); }
+    setCurrentScreen(key);
+  };
 
   if (!fontsLoaded) {
     return (
@@ -970,8 +984,12 @@ export default function PoHMinerWallet() {
 
       // Fetch nonce — use highest of confirmed + pending so rapid sends don't collide
       const nonceRes = await callNodeApi(`/api/wallet/nonce?address=${selectedAddress}`);
+      if (!nonceRes.ok) {
+        const txt = await nonceRes.text().catch(() => '');
+        throw new Error('Nonce fetch failed: ' + (txt || nonceRes.status));
+      }
       const nonceData = await nonceRes.json();
-      if (nonceData.error) throw new Error(nonceData.error);
+      if (nonceData && nonceData.error) throw new Error(nonceData.error);
       const nonce = Math.max(nonceData.nonce || 0, nonceData.pendingNonce || 0) + 1;
 
       // Build and sign the transaction (signingPublicKey required by node's verify())
@@ -983,10 +1001,10 @@ export default function PoHMinerWallet() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(signedTx),
       });
-      const json = await res.json();
-
-      if (!res.ok || json.error) {
-        Alert.alert(t('send.failed_title'), t('send.failed_tip', { msg: json.error || 'Submit failed' }));
+      let json = {};
+      try { json = await res.json(); } catch {}
+      if (!res.ok || (json && json.error)) {
+        Alert.alert(t('send.failed_title'), t('send.failed_tip', { msg: (json && json.error) || 'Submit failed' }));
         setLoading(false);
         return;
       }
@@ -1042,47 +1060,7 @@ export default function PoHMinerWallet() {
     }
   };
 
-  const Header = ({ title }) => (
-    <View style={styles.header}>
-      <Text style={styles.title}>{title || t('app.title')}</Text>
-      <TouchableOpacity onPress={() => setCurrentScreen('settings')}>
-        <Text style={styles.settingsIcon}>⚙</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const TabBar = () => {
-    const tabs = [
-      { key: 'home',    icon: '●', iconOff: '○', label: t('tab.home') },
-      { key: 'history', icon: '⇄', iconOff: '⇄', label: t('tab.history') },
-      { key: 'p2p',     icon: '⇋', iconOff: '⇋', label: 'P2P' },
-      { key: 'chat',    icon: '✦', iconOff: '✦', label: 'Ask AI' },
-      { key: 'search',  icon: '⊙', iconOff: '⊙', label: 'Scan' },
-    ];
-
-    return (
-      <View style={styles.tabBar}>
-        {tabs.map(tab => {
-          const isActive = currentScreen === tab.key;
-          return (
-            <TouchableOpacity
-              key={tab.key}
-              style={styles.tab}
-              onPress={() => {
-                if (tab.key === 'p2p') { setP2pScreen('p2p'); setP2pParams({}); }
-                setCurrentScreen(tab.key);
-              }}
-            >
-              <Text style={[styles.tabIcon, isActive && styles.tabIconActive]}>
-                {isActive ? tab.icon : tab.iconOff}
-              </Text>
-              <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{tab.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    );
-  };
+  // Now using the extracted components from src/components (with logo + consistent tabs)
 
   // ===== SCREENS =====
 
@@ -1090,7 +1068,7 @@ export default function PoHMinerWallet() {
     return (
       <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
         <StatusBar barStyle="light-content" />
-        <Header />
+        <Header t={t} onSettingsPress={() => setCurrentScreen('settings')} />
 
         {/* Balance card */}
         <View style={styles.card}>
@@ -1182,7 +1160,7 @@ export default function PoHMinerWallet() {
           />
         </View>
 
-        <TabBar />
+        <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
       </SafeAreaView>
     );
   }
@@ -1193,7 +1171,7 @@ export default function PoHMinerWallet() {
     return (
       <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
         <StatusBar barStyle="light-content" />
-        <Header title={t('send.title')} />
+        <Header title={t('send.title')} t={t} onSettingsPress={() => setCurrentScreen('settings')} />
         <ScrollView contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 10 }} keyboardShouldPersistTaps="handled">
 
           <Text style={styles.fieldLabel}>TO</Text>
@@ -1312,7 +1290,7 @@ export default function PoHMinerWallet() {
           </View>
         </Modal>
 
-        <TabBar />
+        <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
       </SafeAreaView>
     );
   }
@@ -1321,7 +1299,7 @@ export default function PoHMinerWallet() {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
-        <Header title={t('receive.title')} />
+        <Header title={t('receive.title')} t={t} onSettingsPress={() => setCurrentScreen('settings')} />
 
         <View style={[styles.card, { alignItems: 'center', paddingVertical: 32 }]}>
           <Text style={styles.sectionTitle}>RECEIVE POH</Text>
@@ -1345,7 +1323,7 @@ export default function PoHMinerWallet() {
         <TouchableOpacity style={styles.secondaryBtn} onPress={() => setCurrentScreen('home')}>
           <Text style={{ color: '#6b7280', fontFamily: 'Iceland_400Regular' }}>{t('receive.back')}</Text>
         </TouchableOpacity>
-        <TabBar />
+        <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
       </SafeAreaView>
     );
   }
@@ -1354,7 +1332,7 @@ export default function PoHMinerWallet() {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
-        <Header title={t('history.title')} />
+        <Header title={t('history.title')} t={t} onSettingsPress={() => setCurrentScreen('settings')} />
         <FlatList
           data={txs}
           keyExtractor={(item, i) => item.id || String(i)}
@@ -1408,7 +1386,7 @@ export default function PoHMinerWallet() {
             </Text>
           }
         />
-        <TabBar />
+        <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
       </SafeAreaView>
     );
   }
@@ -1421,7 +1399,7 @@ export default function PoHMinerWallet() {
           activeNodeUrl={activeNodeUrl}
           onNavigate={(screen) => setCurrentScreen(screen)}
         />
-        <TabBar />
+        <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
       </SafeAreaView>
     );
   }
@@ -1430,7 +1408,7 @@ export default function PoHMinerWallet() {
     return (
       <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
         <StatusBar barStyle="light-content" />
-        <Header title={t('wallets.title')} />
+        <Header title={t('wallets.title')} t={t} onSettingsPress={() => setCurrentScreen('settings')} />
         <ScrollView contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 10 }} keyboardShouldPersistTaps="handled">
           {wallets.length === 0 && (
             <Text style={{ color: '#4b5563', marginBottom: 20, fontFamily: 'Iceland_400Regular' }}>{t('wallets.none')}</Text>
@@ -1476,7 +1454,7 @@ export default function PoHMinerWallet() {
             <Text style={{ color: '#6b7280', fontFamily: 'Iceland_400Regular' }}>{t('wallets.done')}</Text>
           </TouchableOpacity>
         </ScrollView>
-        <TabBar />
+        <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
       </SafeAreaView>
     );
   }
@@ -1485,16 +1463,17 @@ export default function PoHMinerWallet() {
     return (
       <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
         <StatusBar barStyle="light-content" />
-        <Header title="Ask AI" />
+        <Header title="Ask AI" t={t} onSettingsPress={() => setCurrentScreen('settings')} />
         <View style={{ flex: 1, backgroundColor: '#000' }}>
           <ChatScreen
             activeNodeUrl={activeNodeUrl}
             nodes={nodes}
             selectedAddress={selectedAddress}
             balances={balances}
+            getPrivateKey={getPrivateKey}
           />
         </View>
-        <TabBar />
+        <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
       </SafeAreaView>
     );
   }
@@ -1503,11 +1482,11 @@ export default function PoHMinerWallet() {
     return (
       <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
         <StatusBar barStyle="light-content" />
-        <Header title="Identity Scanner" />
+        <Header title="Identity Scanner" t={t} onSettingsPress={() => setCurrentScreen('settings')} />
         <View style={{ flex: 1 }}>
           <AIScreen t={t} wallets={wallets} selectedAddress={selectedAddress} balances={balances} setSelectedAddress={setSelectedAddress} saveSelectedAddress={saveSelected} activeNodeUrl={activeNodeUrl} nodes={nodes} />
         </View>
-        <TabBar />
+        <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
       </SafeAreaView>
     );
   }
@@ -1516,7 +1495,7 @@ export default function PoHMinerWallet() {
     return (
       <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
         <StatusBar barStyle="light-content" />
-        <Header title="Settings" />
+        <Header title="Settings" t={t} onSettingsPress={() => setCurrentScreen('settings')} />
 
         {/* Segmented tabs */}
         <View style={{ flexDirection: 'row', marginBottom: 16, marginHorizontal: 10, backgroundColor: '#111', borderRadius: 4, padding: 3 }}>
@@ -1735,7 +1714,7 @@ export default function PoHMinerWallet() {
           <Text style={{ color: '#6b7280', fontFamily: 'Iceland_400Regular' }}>{t('wallets.done')}</Text>
         </TouchableOpacity>
 
-        <TabBar />
+        <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
       </SafeAreaView>
     );
   }
@@ -1763,7 +1742,7 @@ export default function PoHMinerWallet() {
         <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} onLayout={onLayoutRootView}>
           <StatusBar barStyle="light-content" backgroundColor="#000" />
           <CreateOrderScreen {...commonProps} defaultSide={p2pParams.defaultSide || 'sell'} />
-          <TabBar />
+          <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
         </SafeAreaView>
       );
     }
@@ -1777,7 +1756,7 @@ export default function PoHMinerWallet() {
             orderId={p2pParams.orderId}
             tradeId={p2pParams.tradeId}
           />
-          <TabBar />
+          <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
         </SafeAreaView>
       );
     }
@@ -1787,7 +1766,7 @@ export default function PoHMinerWallet() {
         <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} onLayout={onLayoutRootView}>
           <StatusBar barStyle="light-content" backgroundColor="#000" />
           <MyOrdersScreen {...commonProps} />
-          <TabBar />
+          <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
         </SafeAreaView>
       );
     }
@@ -1797,7 +1776,7 @@ export default function PoHMinerWallet() {
         <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} onLayout={onLayoutRootView}>
           <StatusBar barStyle="light-content" backgroundColor="#000" />
           <ReferralScreen {...commonProps} />
-          <TabBar />
+          <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
         </SafeAreaView>
       );
     }
@@ -1807,7 +1786,7 @@ export default function PoHMinerWallet() {
       <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} onLayout={onLayoutRootView}>
         <StatusBar barStyle="light-content" backgroundColor="#000" />
         <P2PScreen {...commonProps} />
-        <TabBar />
+        <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
       </SafeAreaView>
     );
   }

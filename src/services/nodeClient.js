@@ -49,8 +49,9 @@ export async function discoverPeers() {
           .map(p => {
             const host = p.host || p.hostname;
             const port = p.walletApiPort || p.port || 3456;
+            const scheme = p.scheme || (port === 443 ? 'https' : 'http');
             return {
-              url: `http://${host}:${port}`,
+              url: `${scheme}://${host}:${port}`,
               name: p.wallet ? `${p.wallet.slice(0, 14)}…` : host,
               wallet: p.wallet || null,
               region: p.region || null,
@@ -83,13 +84,17 @@ export async function discoverPeers() {
         if (Array.isArray(dir?.peers) && dir.peers.length) {
           const nodes = dir.peers
             .filter(p => p && p.host && (p.walletApiPort || p.port))
-            .map(p => ({
-              url: `http://${p.host}:${p.walletApiPort || p.port || 3456}`,
-              name: p.wallet ? `${p.wallet.slice(0, 14)}…` : p.host,
-              wallet: p.wallet,
-              region: p.region || null,
-              source: 'ipfs-directory',
-            }));
+            .map(p => {
+              const prt = p.walletApiPort || p.port || 3456;
+              const schm = p.scheme || (prt === 443 ? 'https' : 'http');
+              return {
+                url: `${schm}://${p.host}:${prt}`,
+                name: p.wallet ? `${p.wallet.slice(0, 14)}…` : p.host,
+                wallet: p.wallet,
+                region: p.region || null,
+                source: 'ipfs-directory',
+              };
+            });
           if (nodes.length > 0) return nodes;
         }
       }
@@ -160,34 +165,29 @@ export async function pingNode(url) {
   }
 }
 
-// Returns the first node that responds successfully; falls back to first result
-// when all nodes are unreachable (so callers always get a non-null value).
+/**
+ * Ping all nodes in parallel and return the one with lowest successful latency.
+ * Falls back to the first node (with Infinity latency) if none respond.
+ */
 export async function selectBestNode(nodes) {
   if (!nodes || nodes.length === 0) return null;
 
-  return new Promise((resolve) => {
-    let resolved = false;
-    let pending = nodes.length;
-    let firstResult = null;
-
-    nodes.forEach(async (node) => {
+  const results = await Promise.all(
+    nodes.map(async (node) => {
       const latency = await pingNode(node.url);
-      const result = { ...node, lastLatency: latency };
+      return { ...node, lastLatency: latency };
+    })
+  );
 
-      if (!firstResult) firstResult = result;
-      pending--;
+  const successful = results
+    .filter(r => r.lastLatency < Infinity)
+    .sort((a, b) => a.lastLatency - b.lastLatency);
 
-      if (!resolved && latency < Infinity) {
-        resolved = true;
-        resolve(result);
-        return;
-      }
-
-      if (pending === 0 && !resolved) {
-        resolve(firstResult);
-      }
-    });
-  });
+  if (successful.length > 0) {
+    return successful[0];
+  }
+  // fallback to first, even if unreachable (so UI has *something*)
+  return results[0] || null;
 }
 
 /** Chat autocomplete from blockchain job history (Meilisearch / local index on miner). */
