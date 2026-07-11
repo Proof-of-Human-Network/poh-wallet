@@ -1361,13 +1361,13 @@ export default function PoHMinerWallet() {
           contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 10 }}
           ListHeaderComponent={
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <Text style={[styles.sectionTitle, { flexShrink: 1, marginRight: 8 }]} numberOfLines={1}>ALL TRANSACTIONS</Text>
+              <Text style={[styles.sectionTitle, { flexShrink: 1, marginRight: 8, lineHeight: 20 }]} numberOfLines={1}>ALL TRANSACTIONS</Text>
               <View style={{ flexDirection: 'row', gap: 12, flexShrink: 0 }}>
                 <TouchableOpacity onPress={() => setCurrentScreen('explorer')}>
-                  <Text style={{ color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular' }}>Explorer →</Text>
+                  <Text style={{ color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>Explorer →</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => refreshAll(false)}>
-                  <Text style={{ color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular' }}>{t('history.refresh')}</Text>
+                  <Text style={{ color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>{t('history.refresh')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1389,7 +1389,7 @@ export default function PoHMinerWallet() {
                       ? (item.to ? `${item.to.slice(0, 10)}…${item.to.slice(-4)}` : '')
                       : (item.from ? `${item.from.slice(0, 10)}…${item.from.slice(-4)}` : '')}
                   </Text>
-                  <Text style={{ color: '#374151', fontSize: 13, fontFamily: 'Iceland_400Regular' }}>
+                  <Text style={{ color: '#374151', fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 18 }}>
                     {new Date(item.timestamp || Date.now()).toLocaleString()}
                   </Text>
                 </View>
@@ -1403,7 +1403,7 @@ export default function PoHMinerWallet() {
             );
           }}
           ListEmptyComponent={
-            <Text style={{ color: '#374151', marginTop: 30, textAlign: 'center', fontFamily: 'Iceland_400Regular' }}>
+            <Text style={{ color: '#374151', marginTop: 30, textAlign: 'center', fontFamily: 'Iceland_400Regular', fontSize: 15, lineHeight: 22 }}>
               {t('history.no_history')}
             </Text>
           }
@@ -1849,7 +1849,7 @@ const styles = StyleSheet.create({
 
   // Section
   section: { flex: 1, marginBottom: 12, marginHorizontal: 10 },
-  sectionTitle: { color: '#4b5563', fontSize: 13, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular' },
+  sectionTitle: { color: '#4b5563', fontSize: 13, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular', lineHeight: 18 },
 
   // Tx rows
   txRow: {
@@ -1866,10 +1866,10 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
     marginRight: 10,
   },
-  txType: { color: '#fff', fontSize: 15, fontFamily: 'Iceland_400Regular' },
-  txAddr: { color: '#4b5563', fontSize: 13, fontFamily: 'Iceland_400Regular', marginTop: 2 },
-  txAmount: { color: '#22c55e', fontSize: 13, fontFamily: 'Iceland_400Regular', fontWeight: '600' },
-  txStatus: { color: '#4b5563', fontSize: 13, fontFamily: 'Iceland_400Regular', marginTop: 2 },
+  txType: { color: '#fff', fontSize: 15, fontFamily: 'Iceland_400Regular', lineHeight: 20 },
+  txAddr: { color: '#4b5563', fontSize: 13, fontFamily: 'Iceland_400Regular', marginTop: 2, lineHeight: 18 },
+  txAmount: { color: '#22c55e', fontSize: 13, fontFamily: 'Iceland_400Regular', fontWeight: '600', lineHeight: 18 },
+  txStatus: { color: '#4b5563', fontSize: 13, fontFamily: 'Iceland_400Regular', marginTop: 2, lineHeight: 18 },
 
   // Inputs
   fieldLabel: { color: '#4b5563', fontSize: 13, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular', marginBottom: 6 },
