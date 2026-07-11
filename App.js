@@ -151,6 +151,10 @@ export default function PoHMinerWallet() {
 
   const pollRef = useRef(null);
   const prevBalanceRef = useRef(0);
+  // Caches the last built+signed transfer so a retry after a network timeout
+  // resubmits the SAME tx (idempotent at the node) instead of rebuilding at the
+  // next nonce, which would silently send twice. Cleared on a confirmed submit.
+  const pendingSendRef = useRef(null); // { key, signedTx }
   const [pohUsdRate, setPohUsdRate] = useState(null);
 
   // Refs to avoid stale closures in async node-calling functions
@@ -982,18 +986,29 @@ export default function PoHMinerWallet() {
         // Non-fatal: submit will fail with a clear error if key isn't registered
       }
 
-      // Fetch nonce — use highest of confirmed + pending so rapid sends don't collide
-      const nonceRes = await callNodeApi(`/api/wallet/nonce?address=${selectedAddress}`);
-      if (!nonceRes.ok) {
-        const txt = await nonceRes.text().catch(() => '');
-        throw new Error('Nonce fetch failed: ' + (txt || nonceRes.status));
-      }
-      const nonceData = await nonceRes.json();
-      if (nonceData && nonceData.error) throw new Error(nonceData.error);
-      const nonce = Math.max(nonceData.nonce || 0, nonceData.pendingNonce || 0) + 1;
+      // Idempotency: if a previous attempt for this exact (from,to,amount) built a
+      // tx but we're not sure it landed (network error → user retapped Send), reuse
+      // that SAME signed tx. Rebuilding at a fresh nonce would create a second
+      // transfer; resubmitting the same tx is a no-op the node reports as success.
+      const sendKey = `${selectedAddress}:${to}:${amount}`;
+      let signedTx;
+      if (pendingSendRef.current && pendingSendRef.current.key === sendKey) {
+        signedTx = pendingSendRef.current.signedTx;
+      } else {
+        // Fetch nonce — use highest of confirmed + pending so rapid sends don't collide
+        const nonceRes = await callNodeApi(`/api/wallet/nonce?address=${selectedAddress}`);
+        if (!nonceRes.ok) {
+          const txt = await nonceRes.text().catch(() => '');
+          throw new Error('Nonce fetch failed: ' + (txt || nonceRes.status));
+        }
+        const nonceData = await nonceRes.json();
+        if (nonceData && nonceData.error) throw new Error(nonceData.error);
+        const nonce = Math.max(nonceData.nonce || 0, nonceData.pendingNonce || 0) + 1;
 
-      // Build and sign the transaction (signingPublicKey required by node's verify())
-      const signedTx = await buildSignedTransaction({ from: selectedAddress, to, amount, fee, nonce, secretKey, signingPublicKey });
+        // Build and sign the transaction (signingPublicKey required by node's verify())
+        signedTx = await buildSignedTransaction({ from: selectedAddress, to, amount, fee, nonce, secretKey, signingPublicKey });
+        pendingSendRef.current = { key: sendKey, signedTx };
+      }
 
       // Submit to mempool — node validates signature + nonce + balance, gossips to peers
       const res = await callNodeApi('/api/tx/submit', {
@@ -1004,10 +1019,17 @@ export default function PoHMinerWallet() {
       let json = {};
       try { json = await res.json(); } catch {}
       if (!res.ok || (json && json.error)) {
+        // A rejection is a definitive answer (bad nonce, insufficient balance…) —
+        // clear the cached tx so the next attempt rebuilds. Network timeouts throw
+        // instead and are caught below, keeping the cached tx for a safe retry.
+        pendingSendRef.current = null;
         Alert.alert(t('send.failed_title'), t('send.failed_tip', { msg: (json && json.error) || 'Submit failed' }));
         setLoading(false);
         return;
       }
+
+      // Confirmed accepted (or idempotent duplicate) — clear the retry cache.
+      pendingSendRef.current = null;
 
       // Record locally as pending — status updates to 'mined' once included in a block
       const newTx = {
