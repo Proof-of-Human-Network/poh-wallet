@@ -260,38 +260,38 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000', paddingHorizontal: 10 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 16 },
-  back: { color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular' },
-  title: { color: '#fff', fontSize: 18, fontFamily: 'Iceland_400Regular' },
+  back: { color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20 },
+  title: { color: '#fff', fontSize: 18, fontFamily: 'Iceland_400Regular', lineHeight: 26 },
 
   section: { marginBottom: 20 },
-  label: { color: '#aaa', fontSize: 15, fontFamily: 'Iceland_400Regular', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
-  hint: { color: '#555', fontSize: 14, fontFamily: 'Iceland_400Regular', marginTop: 6 },
+  label: { color: '#aaa', fontSize: 15, fontFamily: 'Iceland_400Regular', lineHeight: 22, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
+  hint: { color: '#555', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20, marginTop: 6 },
 
   input: {
     backgroundColor: '#111', borderWidth: 1, borderColor: '#222',
     borderRadius: 8, color: '#fff', padding: 12,
-    fontFamily: 'Iceland_400Regular', fontSize: 14,
+    fontFamily: 'Iceland_400Regular', lineHeight: 20, fontSize: 14,
   },
   row: { flexDirection: 'row' },
 
   currencyPill: { borderRadius: 14, borderWidth: 1, borderColor: '#333', paddingHorizontal: 10, paddingVertical: 5, marginRight: 6 },
   currencyPillActive: { borderColor: '#22c55e', backgroundColor: '#052e16' },
-  currencyPillText: { color: '#888', fontSize: 14, fontFamily: 'Iceland_400Regular' },
+  currencyPillText: { color: '#888', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20 },
   currencyPillTextActive: { color: '#22c55e' },
 
   methodBlock: { backgroundColor: '#0d0d0d', borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#1a1a1a' },
   methodHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  methodIndex: { color: '#666', fontSize: 14, fontFamily: 'Iceland_400Regular' },
-  removeBtn: { color: '#dc2626', fontSize: 14, fontFamily: 'Iceland_400Regular' },
+  methodIndex: { color: '#666', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20 },
+  removeBtn: { color: '#dc2626', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20 },
   addMethodBtn: { borderWidth: 1, borderColor: '#333', borderRadius: 8, paddingVertical: 10, alignItems: 'center', borderStyle: 'dashed' },
-  addMethodText: { color: '#555', fontFamily: 'Iceland_400Regular', fontSize: 13 },
+  addMethodText: { color: '#555', fontFamily: 'Iceland_400Regular', lineHeight: 19, fontSize: 13 },
 
   networkRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   networkPill: { borderRadius: 8, borderWidth: 1, borderColor: '#333', paddingHorizontal: 14, paddingVertical: 7 },
   networkPillActive: { borderColor: '#22c55e', backgroundColor: '#052e16' },
-  networkPillText: { color: '#888', fontSize: 13, fontFamily: 'Iceland_400Regular' },
+  networkPillText: { color: '#888', fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 19 },
   networkPillTextActive: { color: '#22c55e' },
 
   submitBtn: { backgroundColor: '#22c55e', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
-  submitText: { color: '#000', fontSize: 16, fontWeight: '700', fontFamily: 'Iceland_400Regular' },
+  submitText: { color: '#000', fontSize: 16, fontWeight: '700', fontFamily: 'Iceland_400Regular', lineHeight: 23 },
 });

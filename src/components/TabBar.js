@@ -48,8 +48,8 @@ const styles = StyleSheet.create({
   },
   tab: { flex: 1, alignItems: 'center', paddingVertical: 6, paddingHorizontal: 4 },
   tabActive: { borderTopWidth: 3, borderTopColor: '#22c55e' },
-  tabIcon: { color: '#888', fontSize: 16, fontFamily: 'Iceland_400Regular' },
+  tabIcon: { color: '#888', fontSize: 16, fontFamily: 'Iceland_400Regular', lineHeight: 23 },
   tabIconActive: { color: '#22c55e' },
-  tabText: { color: '#888', fontSize: 11, fontFamily: 'Iceland_400Regular', marginTop: 2 },
-  tabTextActive: { color: '#22c55e', fontWeight: '600', fontFamily: 'Iceland_400Regular' },
+  tabText: { color: '#888', fontSize: 11, fontFamily: 'Iceland_400Regular', lineHeight: 16, marginTop: 2 },
+  tabTextActive: { color: '#22c55e', fontWeight: '600', fontFamily: 'Iceland_400Regular', lineHeight: 20 },
 });

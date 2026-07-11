@@ -1137,10 +1137,10 @@ export default function PoHMinerWallet() {
             <Text style={styles.sectionTitle}>RECENT</Text>
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <TouchableOpacity onPress={rebuildBalance}>
-                <Text style={{ color: '#a78bfa', fontSize: 13, fontFamily: 'Iceland_400Regular' }}>Rebuild</Text>
+                <Text style={{ color: '#a78bfa', fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 19 }}>Rebuild</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => refreshAll(false)}>
-                <Text style={{ color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular' }}>{t('home.refresh')}</Text>
+                <Text style={{ color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>{t('home.refresh')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1175,7 +1175,7 @@ export default function PoHMinerWallet() {
               );
             }}
             ListEmptyComponent={
-              <Text style={{ color: '#374151', marginTop: 8, fontSize: 15, fontFamily: 'Iceland_400Regular' }}>
+              <Text style={{ color: '#374151', marginTop: 8, fontSize: 15, fontFamily: 'Iceland_400Regular', lineHeight: 22 }}>
                 {t('home.no_tx')}
               </Text>
             }
@@ -1275,7 +1275,7 @@ export default function PoHMinerWallet() {
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.secondaryBtn} onPress={() => setCurrentScreen('home')}>
-            <Text style={{ color: '#6b7280', fontFamily: 'Iceland_400Regular' }}>{t('send.cancel')}</Text>
+            <Text style={{ color: '#6b7280', fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>{t('send.cancel')}</Text>
           </TouchableOpacity>
         </ScrollView>
 
@@ -1299,7 +1299,7 @@ export default function PoHMinerWallet() {
               />
             ) : (
               <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ color: '#fff', fontFamily: 'Iceland_400Regular' }}>Camera permission required</Text>
+                <Text style={{ color: '#fff', fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>Camera permission required</Text>
               </View>
             )}
             {/* Aim guide overlay */}
@@ -1330,20 +1330,20 @@ export default function PoHMinerWallet() {
               <QRCode value={selectedAddress} size={200} color="#000" backgroundColor="#fff" />
             </View>
           ) : (
-            <Text style={{ color: '#4b5563', marginTop: 16, fontFamily: 'Iceland_400Regular' }}>{t('receive.no_wallet')}</Text>
+            <Text style={{ color: '#4b5563', marginTop: 16, fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>{t('receive.no_wallet')}</Text>
           )}
           <TouchableOpacity onPress={copyAddress} style={{ marginTop: 20, alignItems: 'center' }}>
-            <Text style={{ color: '#374151', fontSize: 14, fontFamily: 'Iceland_400Regular', textAlign: 'center' }} numberOfLines={1}>
+            <Text style={{ color: '#374151', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20, textAlign: 'center' }} numberOfLines={1}>
               {selectedAddress || t('receive.no_address')}
             </Text>
-            <Text style={{ color: '#22c55e', fontSize: 15, marginTop: 8, fontFamily: 'Iceland_400Regular' }}>
+            <Text style={{ color: '#22c55e', fontSize: 15, marginTop: 8, fontFamily: 'Iceland_400Regular', lineHeight: 22 }}>
               {t('receive.tap_to_copy')}
             </Text>
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity style={styles.secondaryBtn} onPress={() => setCurrentScreen('home')}>
-          <Text style={{ color: '#6b7280', fontFamily: 'Iceland_400Regular' }}>{t('receive.back')}</Text>
+          <Text style={{ color: '#6b7280', fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>{t('receive.back')}</Text>
         </TouchableOpacity>
         <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
       </SafeAreaView>
@@ -1433,7 +1433,7 @@ export default function PoHMinerWallet() {
         <Header title={t('wallets.title')} t={t} onSettingsPress={() => setCurrentScreen('settings')} />
         <ScrollView contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 10 }} keyboardShouldPersistTaps="handled">
           {wallets.length === 0 && (
-            <Text style={{ color: '#4b5563', marginBottom: 20, fontFamily: 'Iceland_400Regular' }}>{t('wallets.none')}</Text>
+            <Text style={{ color: '#4b5563', marginBottom: 20, fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>{t('wallets.none')}</Text>
           )}
           {wallets.map((w, i) => {
             const bal = balances[w.address] || 0;
@@ -1452,7 +1452,7 @@ export default function PoHMinerWallet() {
                   try { revealPrivateKey(w.address); }
                   catch (e) { Alert.alert(t('error'), 'Failed to show private key'); }
                 }} style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
-                  <Text style={{ color: '#ef4444', fontSize: 15, fontFamily: 'Iceland_400Regular' }}>{t('wallets.show_key')}</Text>
+                  <Text style={{ color: '#ef4444', fontSize: 15, fontFamily: 'Iceland_400Regular', lineHeight: 22 }}>{t('wallets.show_key')}</Text>
                 </TouchableOpacity>
               </View>
             );
@@ -1470,10 +1470,10 @@ export default function PoHMinerWallet() {
             secureTextEntry
           />
           <TouchableOpacity style={styles.secondaryBtn} onPress={importWallet} disabled={loading}>
-            <Text style={{ color: '#22c55e', fontFamily: 'Iceland_400Regular' }}>{t('wallets.import_btn')}</Text>
+            <Text style={{ color: '#22c55e', fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>{t('wallets.import_btn')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.secondaryBtn} onPress={() => setCurrentScreen('home')}>
-            <Text style={{ color: '#6b7280', fontFamily: 'Iceland_400Regular' }}>{t('wallets.done')}</Text>
+            <Text style={{ color: '#6b7280', fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>{t('wallets.done')}</Text>
           </TouchableOpacity>
         </ScrollView>
         <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
@@ -1541,7 +1541,7 @@ export default function PoHMinerWallet() {
                 color: settingsTab === tab.key
                   ? (tab.key === 'danger' ? '#fff' : '#000')
                   : (tab.key === 'danger' ? '#ef4444' : '#9ca3af'),
-                fontWeight: '700', fontFamily: 'Iceland_400Regular', fontSize: 13,
+                fontWeight: '700', fontFamily: 'Iceland_400Regular', lineHeight: 19, fontSize: 13,
               }}>
                 {tab.label}
               </Text>
@@ -1552,11 +1552,11 @@ export default function PoHMinerWallet() {
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 140, paddingHorizontal: 10 }} keyboardShouldPersistTaps="handled">
           {settingsTab === 'nodes' ? (
             <>
-              <Text style={{ color: '#4b5563', marginBottom: 12, fontSize: 13, fontFamily: 'Iceland_400Regular' }}>
+              <Text style={{ color: '#4b5563', marginBottom: 12, fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 19 }}>
                 {t('settings.nodes_desc')}
               </Text>
               {nodes.length === 0 && (
-                <Text style={{ color: '#4b5563', marginBottom: 16, fontFamily: 'Iceland_400Regular' }}>{t('settings.no_nodes')}</Text>
+                <Text style={{ color: '#4b5563', marginBottom: 16, fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>{t('settings.no_nodes')}</Text>
               )}
               {nodes.map((node, index) => {
                 const isActive = node.url === activeNodeUrl;
@@ -1564,8 +1564,8 @@ export default function PoHMinerWallet() {
                   <View key={index} style={[styles.walletRow, isActive && { borderColor: '#22c55e', borderWidth: 1 }]}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.walletAddr} numberOfLines={1}>{node.url}</Text>
-                      {node.name && <Text style={{ color: '#4b5563', fontSize: 14, fontFamily: 'Iceland_400Regular' }}>{node.name}</Text>}
-                      {node.lastLatency && <Text style={{ color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular' }}>{node.lastLatency} ms</Text>}
+                      {node.name && <Text style={{ color: '#4b5563', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>{node.name}</Text>}
+                      {node.lastLatency && <Text style={{ color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>{node.lastLatency} ms</Text>}
                     </View>
                     {!isActive && (
                       <TouchableOpacity onPress={async () => {
@@ -1573,7 +1573,7 @@ export default function PoHMinerWallet() {
                         await Storage.saveActiveNodeUrl(node.url);
                         await refreshAll(false);
                       }}>
-                        <Text style={{ color: '#22c55e', fontFamily: 'Iceland_400Regular', fontSize: 13 }}>{t('settings.use')}</Text>
+                        <Text style={{ color: '#22c55e', fontFamily: 'Iceland_400Regular', lineHeight: 19, fontSize: 13 }}>{t('settings.use')}</Text>
                       </TouchableOpacity>
                     )}
                     <TouchableOpacity onPress={async () => {
@@ -1585,7 +1585,7 @@ export default function PoHMinerWallet() {
                         await Storage.saveActiveNodeUrl(newNodes[0].url);
                       }
                     }} style={{ marginLeft: 12 }}>
-                      <Text style={{ color: '#ef4444', fontFamily: 'Iceland_400Regular', fontSize: 13 }}>{t('settings.remove')}</Text>
+                      <Text style={{ color: '#ef4444', fontFamily: 'Iceland_400Regular', lineHeight: 19, fontSize: 13 }}>{t('settings.remove')}</Text>
                     </TouchableOpacity>
                   </View>
                 );
@@ -1627,13 +1627,13 @@ export default function PoHMinerWallet() {
               >
                 <Text style={styles.primaryBtnText}>{t('settings.discover_peers')}</Text>
               </TouchableOpacity>
-              <Text style={{ color: '#4b5563', fontSize: 11, marginTop: 4, fontFamily: 'Iceland_400Regular' }}>
+              <Text style={{ color: '#4b5563', fontSize: 11, marginTop: 4, fontFamily: 'Iceland_400Regular', lineHeight: 16 }}>
                 Checks /peers on miner.proofofhuman.ge + others; falls back to IPFS.
               </Text>
             </>
           ) : settingsTab === 'language' ? (
             <>
-              <Text style={{ color: '#4b5563', marginBottom: 12, fontSize: 13, fontFamily: 'Iceland_400Regular' }}>
+              <Text style={{ color: '#4b5563', marginBottom: 12, fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 19 }}>
                 {t('settings.lang_desc')}
               </Text>
               {SUPPORTED_LANGUAGES.map((lang) => {
@@ -1646,10 +1646,10 @@ export default function PoHMinerWallet() {
                   >
                     <View style={{ flex: 1 }}>
                       <Text style={styles.walletAddr}>{lang.nativeName}</Text>
-                      <Text style={{ color: '#4b5563', fontSize: 14, fontFamily: 'Iceland_400Regular' }}>{lang.name}</Text>
+                      <Text style={{ color: '#4b5563', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>{lang.name}</Text>
                     </View>
                     {isActiveLang && (
-                      <Text style={{ color: '#22c55e', fontFamily: 'Iceland_400Regular', fontSize: 15 }}>{t('lang.current')}</Text>
+                      <Text style={{ color: '#22c55e', fontFamily: 'Iceland_400Regular', lineHeight: 22, fontSize: 15 }}>{t('lang.current')}</Text>
                     )}
                   </TouchableOpacity>
                 );
@@ -1658,7 +1658,7 @@ export default function PoHMinerWallet() {
           ) : settingsTab === 'wallets' ? (
             <>
               {wallets.length === 0 && (
-                <Text style={{ color: '#4b5563', marginBottom: 20, fontFamily: 'Iceland_400Regular' }}>{t('wallets.none')}</Text>
+                <Text style={{ color: '#4b5563', marginBottom: 20, fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>{t('wallets.none')}</Text>
               )}
               {wallets.map((w, i) => {
                 const bal = balances[w.address] || 0;
@@ -1677,7 +1677,7 @@ export default function PoHMinerWallet() {
                       try { revealPrivateKey(w.address); }
                       catch (e) { Alert.alert(t('error'), 'Failed to show private key'); }
                     }} style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
-                      <Text style={{ color: '#ef4444', fontSize: 15, fontFamily: 'Iceland_400Regular' }}>{t('wallets.show_key')}</Text>
+                      <Text style={{ color: '#ef4444', fontSize: 15, fontFamily: 'Iceland_400Regular', lineHeight: 22 }}>{t('wallets.show_key')}</Text>
                     </TouchableOpacity>
                   </View>
                 );
@@ -1695,15 +1695,15 @@ export default function PoHMinerWallet() {
                 secureTextEntry
               />
               <TouchableOpacity style={styles.secondaryBtn} onPress={importWallet} disabled={loading}>
-                <Text style={{ color: '#22c55e', fontFamily: 'Iceland_400Regular' }}>{t('wallets.import_btn')}</Text>
+                <Text style={{ color: '#22c55e', fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>{t('wallets.import_btn')}</Text>
               </TouchableOpacity>
             </>
           ) : settingsTab === 'danger' ? (
             <View style={{ padding: 8 }}>
-              <Text style={{ color: '#ef4444', fontSize: 15, fontFamily: 'Iceland_400Regular', marginBottom: 12 }}>
+              <Text style={{ color: '#ef4444', fontSize: 15, fontFamily: 'Iceland_400Regular', lineHeight: 22, marginBottom: 12 }}>
                 Danger Zone
               </Text>
-              <Text style={{ color: '#4b5563', marginBottom: 16, fontFamily: 'Iceland_400Regular', fontSize: 13 }}>
+              <Text style={{ color: '#4b5563', marginBottom: 16, fontFamily: 'Iceland_400Regular', lineHeight: 19, fontSize: 13 }}>
                 These actions are irreversible.
               </Text>
               <TouchableOpacity
@@ -1724,7 +1724,7 @@ export default function PoHMinerWallet() {
                   }
                 }}
               >
-                <Text style={{ color: '#ef4444', fontFamily: 'Iceland_400Regular' }}>
+                <Text style={{ color: '#ef4444', fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>
                   Clear All Local Wallets &amp; Data
                 </Text>
               </TouchableOpacity>
@@ -1733,7 +1733,7 @@ export default function PoHMinerWallet() {
         </ScrollView>
 
         <TouchableOpacity style={styles.secondaryBtn} onPress={() => setCurrentScreen('home')}>
-          <Text style={{ color: '#6b7280', fontFamily: 'Iceland_400Regular' }}>{t('wallets.done')}</Text>
+          <Text style={{ color: '#6b7280', fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>{t('wallets.done')}</Text>
         </TouchableOpacity>
 
         <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
@@ -1821,7 +1821,7 @@ const styles = StyleSheet.create({
 
   // Header
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingHorizontal: 10 },
-  title: { fontSize: 20, color: '#fff', fontFamily: 'Iceland_400Regular' },
+  title: { fontSize: 20, color: '#fff', fontFamily: 'Iceland_400Regular', lineHeight: 29 },
   settingsIcon: { color: '#6b7280', fontSize: 18 },
 
   // Balance card
@@ -1834,18 +1834,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(34,197,94,0.35)',
   },
-  label: { color: '#22c55e', fontSize: 13, letterSpacing: 2, fontFamily: 'Iceland_400Regular' },
-  balance: { fontSize: 48, color: '#fff', fontWeight: '200', fontFamily: 'Iceland_400Regular' },
-  balanceCurrency: { fontSize: 18, color: '#22c55e', fontFamily: 'Iceland_400Regular', marginBottom: 10 },
-  usd: { color: '#4b5563', fontSize: 15, fontFamily: 'Iceland_400Regular', marginTop: 2 },
-  addressSmall: { color: '#374151', fontSize: 14, fontFamily: 'Iceland_400Regular' },
-  sync: { color: '#374151', fontSize: 13, fontFamily: 'Iceland_400Regular' },
+  label: { color: '#22c55e', fontSize: 13, letterSpacing: 2, fontFamily: 'Iceland_400Regular', lineHeight: 19 },
+  balance: { fontSize: 48, color: '#fff', fontWeight: '200', fontFamily: 'Iceland_400Regular', lineHeight: 70 },
+  balanceCurrency: { fontSize: 18, color: '#22c55e', fontFamily: 'Iceland_400Regular', lineHeight: 26, marginBottom: 10 },
+  usd: { color: '#4b5563', fontSize: 15, fontFamily: 'Iceland_400Regular', lineHeight: 22, marginTop: 2 },
+  addressSmall: { color: '#374151', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20 },
+  sync: { color: '#374151', fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 19 },
 
   // Action row
   actions: { flexDirection: 'row', gap: 8, marginBottom: 16, marginHorizontal: 10 },
   actionBtn: { flex: 1, backgroundColor: '#111', paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
   actionIcon: { color: '#fff', fontSize: 20, marginBottom: 4 },
-  actionText: { color: '#9ca3af', fontSize: 14, fontFamily: 'Iceland_400Regular' },
+  actionText: { color: '#9ca3af', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20 },
 
   // Section
   section: { flex: 1, marginBottom: 12, marginHorizontal: 10 },
@@ -1872,11 +1872,11 @@ const styles = StyleSheet.create({
   txStatus: { color: '#4b5563', fontSize: 13, fontFamily: 'Iceland_400Regular', marginTop: 2, lineHeight: 18 },
 
   // Inputs
-  fieldLabel: { color: '#4b5563', fontSize: 13, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular', marginBottom: 6 },
+  fieldLabel: { color: '#4b5563', fontSize: 13, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular', lineHeight: 19, marginBottom: 6 },
   input: {
     backgroundColor: '#111', color: '#fff', padding: 14,
     borderRadius: 10, marginBottom: 12, fontSize: 13,
-    fontFamily: 'Iceland_400Regular', borderWidth: 1, borderColor: '#1f1f1f',
+    fontFamily: 'Iceland_400Regular', lineHeight: 19, borderWidth: 1, borderColor: '#1f1f1f',
   },
 
   // Send amount card
@@ -1887,35 +1887,35 @@ const styles = StyleSheet.create({
   },
   amountInput: {
     color: '#fff', fontSize: 42, fontWeight: '200',
-    fontFamily: 'Iceland_400Regular', minWidth: 120, textAlign: 'center',
+    fontFamily: 'Iceland_400Regular', lineHeight: 61, minWidth: 120, textAlign: 'center',
   },
-  amountCurrency: { color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular', marginTop: 2 },
-  amountAvail: { color: '#374151', fontSize: 14, fontFamily: 'Iceland_400Regular', marginTop: 8 },
+  amountCurrency: { color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20, marginTop: 2 },
+  amountAvail: { color: '#374151', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20, marginTop: 8 },
 
   // Preset buttons
   presetBtn: { flex: 1, backgroundColor: '#111', paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
-  presetText: { color: '#9ca3af', fontSize: 14, fontFamily: 'Iceland_400Regular' },
+  presetText: { color: '#9ca3af', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20 },
 
   // Summary card
   summaryCard: { backgroundColor: '#0d0d0d', borderRadius: 12, padding: 16, marginTop: 16 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
-  summaryLabel: { color: '#9ca3af', fontSize: 15, fontFamily: 'Iceland_400Regular' },
-  summaryValue: { color: '#fff', fontSize: 15, fontFamily: 'Iceland_400Regular' },
+  summaryLabel: { color: '#9ca3af', fontSize: 15, fontFamily: 'Iceland_400Regular', lineHeight: 22 },
+  summaryValue: { color: '#fff', fontSize: 15, fontFamily: 'Iceland_400Regular', lineHeight: 22 },
 
   // Buttons
   primaryBtn: { backgroundColor: '#22c55e', padding: 16, borderRadius: 4, alignItems: 'center', marginVertical: 8 },
-  primaryBtnText: { color: '#000', fontWeight: '700', fontSize: 16, fontFamily: 'Iceland_400Regular' },
+  primaryBtnText: { color: '#000', fontWeight: '700', fontSize: 16, fontFamily: 'Iceland_400Regular', lineHeight: 23 },
   secondaryBtn: { padding: 14, alignItems: 'center', marginTop: 4 },
 
   // Screen title (kept for compat)
-  screenTitle: { fontSize: 20, color: '#fff', marginBottom: 16, fontFamily: 'Iceland_400Regular' },
-  address: { color: '#374151', fontSize: 14, marginTop: 4, fontFamily: 'Iceland_400Regular' },
+  screenTitle: { fontSize: 20, color: '#fff', marginBottom: 16, fontFamily: 'Iceland_400Regular', lineHeight: 29 },
+  address: { color: '#374151', fontSize: 14, marginTop: 4, fontFamily: 'Iceland_400Regular', lineHeight: 20 },
 
   // Wallet rows
   walletRow: { backgroundColor: '#111', padding: 14, borderRadius: 10, marginBottom: 8, flexDirection: 'row', alignItems: 'center' },
   selectedWallet: { borderColor: '#22c55e', borderWidth: 1 },
-  walletAddr: { color: '#fff', fontSize: 15, fontFamily: 'Iceland_400Regular' },
-  walletBal: { color: '#22c55e', fontSize: 15, marginTop: 3, fontFamily: 'Iceland_400Regular' },
+  walletAddr: { color: '#fff', fontSize: 15, fontFamily: 'Iceland_400Regular', lineHeight: 22 },
+  walletBal: { color: '#22c55e', fontSize: 15, marginTop: 3, fontFamily: 'Iceland_400Regular', lineHeight: 22 },
 
   // Tab bar
   tabBar: {
@@ -1928,7 +1928,7 @@ const styles = StyleSheet.create({
   tab: { flex: 1, alignItems: 'center', paddingVertical: 8 },
   tabIcon: { fontSize: 16, color: '#374151' },
   tabIconActive: { color: '#22c55e' },
-  tabText: { color: '#374151', fontSize: 15, fontFamily: 'Iceland_400Regular', marginTop: 3 },
+  tabText: { color: '#374151', fontSize: 15, fontFamily: 'Iceland_400Regular', lineHeight: 22, marginTop: 3 },
   tabTextActive: { color: '#22c55e' },
 
   langRow: { backgroundColor: '#111', padding: 12, borderRadius: 8, marginBottom: 6, flexDirection: 'row', alignItems: 'center' },
@@ -1948,7 +1948,7 @@ const styles = StyleSheet.create({
     paddingTop: 56, paddingBottom: 16, paddingHorizontal: 20,
     backgroundColor: '#000',
   },
-  qrModalTitle: { color: '#fff', fontSize: 18, fontFamily: 'Iceland_400Regular' },
+  qrModalTitle: { color: '#fff', fontSize: 18, fontFamily: 'Iceland_400Regular', lineHeight: 26 },
   qrAimOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center', justifyContent: 'center',
@@ -1964,5 +1964,5 @@ const styles = StyleSheet.create({
     paddingVertical: 12, paddingHorizontal: 36,
     backgroundColor: '#111', borderRadius: 10, borderWidth: 1, borderColor: '#2a2a2a',
   },
-  qrModalCloseText: { color: '#9ca3af', fontSize: 15, fontFamily: 'Iceland_400Regular' },
+  qrModalCloseText: { color: '#9ca3af', fontSize: 15, fontFamily: 'Iceland_400Regular', lineHeight: 22 },
 });

@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
     fontSize: 26,
     color: '#22c55e',
     fontWeight: '700',
-    fontFamily: 'Iceland_400Regular',
+    fontFamily: 'Iceland_400Regular', lineHeight: 38,
   },
   settingsLink: {
     color: '#22c55e',
