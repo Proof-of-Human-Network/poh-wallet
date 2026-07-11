@@ -33,37 +33,51 @@ const _fmtPoh = p => {
 };
 
 function LogSlider({ value, onChange, disabled }) {
-  const [trackWidth, setTrackWidth] = useState(1);
   const step = _pohToStep(value);
-  const fillPct = step <= 0 ? 0 : ((step - 1) / (LOG_STEPS - 1)) * 100;
-  const stepRef = useRef(step);
-  stepRef.current = step;
-  const trackWidthRef = useRef(trackWidth);
-  trackWidthRef.current = trackWidth;
+  const fillPct = step <= 1 ? 0 : ((step - 1) / (LOG_STEPS - 1)) * 100;
 
-  const clampStep = (x) => {
-    const s = Math.round((x / trackWidthRef.current) * LOG_STEPS);
-    return Math.max(0, Math.min(LOG_STEPS, s));
+  // Track geometry, kept in refs so the (once-created) PanResponder always reads
+  // fresh values. We use absolute pageX minus the track's window offset instead of
+  // nativeEvent.locationX: locationX is reported relative to whatever child view is
+  // under the finger (the thumb dot / fill bar), so dragging over them collapses the
+  // coordinate and the value teleports toward 0 — which looked like the fee snapping
+  // onto the "Default"/preset marks.
+  const trackRef = useRef(null);
+  const trackWidthRef = useRef(1);
+  const trackLeftRef = useRef(0);
+
+  const measureTrack = () => {
+    trackRef.current?.measureInWindow((x, _y, w) => {
+      trackLeftRef.current = x;
+      if (w) trackWidthRef.current = w;
+    });
+  };
+
+  const stepFromPageX = (pageX) => {
+    const x = pageX - trackLeftRef.current;
+    const s = Math.round((x / (trackWidthRef.current || 1)) * (LOG_STEPS - 1)) + 1;
+    return Math.max(1, Math.min(LOG_STEPS, s));
   };
 
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => !disabled,
     onMoveShouldSetPanResponder:  () => !disabled,
-    onPanResponderGrant: (e) => onChange(_stepToPoh(clampStep(e.nativeEvent.locationX))),
-    onPanResponderMove:  (e) => onChange(_stepToPoh(clampStep(e.nativeEvent.locationX))),
+    onPanResponderGrant: (e) => { measureTrack(); onChange(_stepToPoh(stepFromPageX(e.nativeEvent.pageX))); },
+    onPanResponderMove:  (e) => onChange(_stepToPoh(stepFromPageX(e.nativeEvent.pageX))),
   })).current;
 
   return (
     <View
-      onLayout={e => setTrackWidth(e.nativeEvent.layout.width)}
+      ref={trackRef}
+      onLayout={measureTrack}
       {...panResponder.panHandlers}
       style={{ height: 36, justifyContent: 'center', paddingVertical: 10 }}
     >
-      <View style={{ height: 3, backgroundColor: '#2a2a2a', borderRadius: 2 }}>
+      <View pointerEvents="none" style={{ height: 3, backgroundColor: '#2a2a2a', borderRadius: 2 }}>
         <View style={{ width: `${fillPct}%`, height: 3, backgroundColor: '#22c55e', borderRadius: 2 }} />
       </View>
-      {step > 0 && (
-        <View style={{
+      {step > 1 && (
+        <View pointerEvents="none" style={{
           position: 'absolute', left: `${fillPct}%`, marginLeft: -7,
           top: 11, width: 14, height: 14, borderRadius: 7, backgroundColor: '#22c55e',
         }} />

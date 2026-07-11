@@ -1339,8 +1339,8 @@ export default function PoHMinerWallet() {
           contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 10 }}
           ListHeaderComponent={
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <Text style={styles.sectionTitle}>ALL TRANSACTIONS</Text>
-              <View style={{ flexDirection: 'row', gap: 12 }}>
+              <Text style={[styles.sectionTitle, { flexShrink: 1, marginRight: 8 }]} numberOfLines={1}>ALL TRANSACTIONS</Text>
+              <View style={{ flexDirection: 'row', gap: 12, flexShrink: 0 }}>
                 <TouchableOpacity onPress={() => setCurrentScreen('explorer')}>
                   <Text style={{ color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular' }}>Explorer →</Text>
                 </TouchableOpacity>

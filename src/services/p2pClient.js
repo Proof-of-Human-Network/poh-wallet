@@ -26,28 +26,38 @@ export async function getSigningKeys(privateKeyHex) {
 
 // ─── Order book ──────────────────────────────────────────────────────────────
 
+// fetch with a hard timeout — a bare fetch to an unreachable node never settles,
+// which left the P2P screen's spinner stuck forever. AbortController + setTimeout
+// is used (not AbortSignal.timeout) so it works on all RN/Hermes versions.
+async function fetchJSON(url, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function fetchOrders(nodeUrl, { side, quoteCurrency, status } = {}) {
   const params = new URLSearchParams();
   if (side) params.set('side', side);
   if (quoteCurrency) params.set('quoteCurrency', quoteCurrency);
   if (status) params.set('status', status);
-  const res = await fetch(`${nodeUrl}/api/p2p/orders?${params}`);
-  return res.json();
+  return fetchJSON(`${nodeUrl}/api/p2p/orders?${params}`);
 }
 
 export async function fetchMyOrders(nodeUrl, address) {
-  const res = await fetch(`${nodeUrl}/api/p2p/orders/my?address=${encodeURIComponent(address)}`);
-  return res.json();
+  return fetchJSON(`${nodeUrl}/api/p2p/orders/my?address=${encodeURIComponent(address)}`);
 }
 
 export async function fetchOrder(nodeUrl, orderId) {
-  const res = await fetch(`${nodeUrl}/api/p2p/orders/${orderId}`);
-  return res.json();
+  return fetchJSON(`${nodeUrl}/api/p2p/orders/${orderId}`);
 }
 
 export async function fetchCurrencies(nodeUrl) {
-  const res = await fetch(`${nodeUrl}/api/p2p/currencies`);
-  return res.json();
+  return fetchJSON(`${nodeUrl}/api/p2p/currencies`);
 }
 
 // ─── Create / cancel order ───────────────────────────────────────────────────
