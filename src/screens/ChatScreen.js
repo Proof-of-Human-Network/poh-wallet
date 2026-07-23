@@ -12,23 +12,24 @@ import * as FileSystem from 'expo-file-system';
 
 const MAX_ATTACH_BYTES = 100 * 1024;
 
-// ── Log fee slider: 1 μPOH (1e-9 POH) → 1 POH, logarithmic ──────────────────────
-const LOG_MIN = 0.000000001, LOG_MAX = 1, LOG_STEPS = 200;
+// ── Log fee slider: 1 kPOH (=1000 μPOH, 1e-6 POH) → 1 POH, logarithmic ─────────
+const LOG_MIN = 0.000001, LOG_MAX = 1, LOG_STEPS = 200;   // floor = 1 kPOH = 1000 μPOH
 const _stepToPoh = s => s <= 0 ? LOG_MIN : LOG_MIN * Math.pow(LOG_MAX / LOG_MIN, (s - 1) / (LOG_STEPS - 1));
 const _pohToStep = v => v <= LOG_MIN ? 1 : Math.round(1 + (LOG_STEPS - 1) * Math.log(v / LOG_MIN) / Math.log(LOG_MAX / LOG_MIN));
 // Value at a fraction [0,1] of the log range — used by the preset marks.
 const _pctToPoh = pct => LOG_MIN * Math.pow(LOG_MAX / LOG_MIN, pct);
-// Preset marks: default 1/3 (= exactly 1000 μPOH), low 25%, high 60%, max 100%.
+// Preset marks: default 0% (= 1 kPOH = 1000 μPOH), low 25%, high 60%, max 100%.
 const FEE_PRESETS = [
-  { label: 'Default', pct: 1/3 },   // 1e-9 * (1e9)^(1/3) = 1e-6 POH = 1000 μPOH
+  { label: 'Default', pct: 0.00 },
   { label: 'Low',     pct: 0.25 },
   { label: 'High',    pct: 0.60 },
   { label: 'Max',     pct: 1.00 },
 ];
 const _fmtPoh = p => {
   if (p <= 0) return '0';
-  if (p < 0.001) return Math.round(p * 1e9).toLocaleString() + ' μPOH';
-  if (p < 1)     return p.toPrecision(2) + ' POH';
+  const k = p * 1e6;                     // kPOH — 1 kPOH = 1000 μPOH = 1e-6 POH
+  if (k < 1000) return (k < 10 ? String(Math.round(k * 10) / 10) : Math.round(k).toLocaleString()) + ' kPOH';
+  if (p < 1)    return p.toPrecision(2) + ' POH';
   return (p < 10 ? p.toFixed(2) : Math.round(p).toString()) + ' POH';
 };
 
@@ -153,7 +154,7 @@ const POLL_TIMEOUT_MS  = 120_000;
 // ── Main screen ───────────────────────────────────────────────────────────────
 export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress, balances, getPrivateKey }) {
   const [message,    setMessage]    = useState('');
-  const [budget,     setBudget]     = useState(_pctToPoh(1/3)); // default preset = 1000 μPOH
+  const [budget,     setBudget]     = useState(_pctToPoh(0)); // default preset = 1 kPOH (1000 μPOH)
   const [loading,    setLoading]    = useState(false);
   const [statusText, setStatusText] = useState('');
   const [result,     setResult]     = useState(null);
