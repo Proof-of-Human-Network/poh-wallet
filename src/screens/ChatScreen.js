@@ -18,9 +18,9 @@ const _stepToPoh = s => s <= 0 ? LOG_MIN : LOG_MIN * Math.pow(LOG_MAX / LOG_MIN,
 const _pohToStep = v => v <= LOG_MIN ? 1 : Math.round(1 + (LOG_STEPS - 1) * Math.log(v / LOG_MIN) / Math.log(LOG_MAX / LOG_MIN));
 // Value at a fraction [0,1] of the log range — used by the preset marks.
 const _pctToPoh = pct => LOG_MIN * Math.pow(LOG_MAX / LOG_MIN, pct);
-// Preset marks: default 0%, low 25%, high 60%, max 100%.
+// Preset marks: default 1/3 (= exactly 1000 μPOH), low 25%, high 60%, max 100%.
 const FEE_PRESETS = [
-  { label: 'Default', pct: 0.00 },
+  { label: 'Default', pct: 1/3 },   // 1e-9 * (1e9)^(1/3) = 1e-6 POH = 1000 μPOH
   { label: 'Low',     pct: 0.25 },
   { label: 'High',    pct: 0.60 },
   { label: 'Max',     pct: 1.00 },
@@ -153,7 +153,7 @@ const POLL_TIMEOUT_MS  = 120_000;
 // ── Main screen ───────────────────────────────────────────────────────────────
 export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress, balances, getPrivateKey }) {
   const [message,    setMessage]    = useState('');
-  const [budget,     setBudget]     = useState(_pctToPoh(0)); // default = 0% preset (1 μPOH)
+  const [budget,     setBudget]     = useState(_pctToPoh(1/3)); // default preset = 1000 μPOH
   const [loading,    setLoading]    = useState(false);
   const [statusText, setStatusText] = useState('');
   const [result,     setResult]     = useState(null);
