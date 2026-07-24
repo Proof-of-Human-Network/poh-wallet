@@ -228,7 +228,7 @@ export default function PoHMinerWallet() {
         await Storage.saveNodes(loadedNodes);
       }
 
-      // Auto-discover peers from bootnodes (miner.proofofhuman.ge/peers + fallbacks)
+      // Auto-discover peers from bootnodes (miner.poh.ge/peers + fallbacks)
       // This ensures we get fresh miner nodes when static defaults are down or empty.
       try {
         const discovered = await discoverPeers();
@@ -486,7 +486,7 @@ export default function PoHMinerWallet() {
     } catch { /* network error — leave rate as-is */ }
   }
 
-  // Discover fresh peers from bootnodes (miner.proofofhuman.ge/peers first, then fallbacks)
+  // Discover fresh peers from bootnodes (miner.poh.ge/peers first, then fallbacks)
   // Adds new nodes to the list and may switch to the best one.
   const refreshPeerDiscovery = async () => {
     setLoading(true);
@@ -1619,7 +1619,7 @@ export default function PoHMinerWallet() {
                 <Text style={styles.primaryBtnText}>{t('settings.add_node')}</Text>
               </TouchableOpacity>
 
-              {/* Auto discovery from bootnodes: tries miner.proofofhuman.ge/peers first */}
+              {/* Auto discovery from bootnodes: tries miner.poh.ge/peers first */}
               <TouchableOpacity
                 style={[styles.primaryBtn, { backgroundColor: '#0a7', marginTop: 8 }]}
                 onPress={refreshPeerDiscovery}
@@ -1628,7 +1628,7 @@ export default function PoHMinerWallet() {
                 <Text style={styles.primaryBtnText}>{t('settings.discover_peers')}</Text>
               </TouchableOpacity>
               <Text style={{ color: '#4b5563', fontSize: 11, marginTop: 4, fontFamily: 'Iceland_400Regular', lineHeight: 16 }}>
-                Checks /peers on miner.proofofhuman.ge + others; falls back to IPFS.
+                Checks /peers on miner.poh.ge + others; falls back to IPFS.
               </Text>
             </>
           ) : settingsTab === 'language' ? (

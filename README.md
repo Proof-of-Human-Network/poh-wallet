@@ -48,12 +48,12 @@ eas build -p android --profile production
 The wallet communicates with any `poh-miner-network` node over HTTP.
 
 **Discovery:** On load and on failure, the wallet automatically queries bootnodes for peers:
-- Primary: `https://miner.proofofhuman.ge/peers`
+- Primary: `https://miner.poh.ge/peers`
 - Then community bootnodes
 - Falls back to `/ipfs/latest` + IPFS if needed.
 - Discovered peers (with `host` + `walletApiPort`) are added as `http://...` nodes.
 
-**Defaults:** `https://miner.proofofhuman.ge`
+**Defaults:** `https://miner.poh.ge`
 
 To add your own: **Settings → Nodes → Add** (e.g. `http://192.168.1.100:3456`).
 

@@ -3,7 +3,7 @@ import { DEFAULT_BOOTNODES } from '../constants';
 const PING_TIMEOUT_MS = 4000;
 
 // ── Peer discovery ────────────────────────────────────────────────────────────
-// Wallet must try miner.proofofhuman.ge/peers first. If unavailable or empty,
+// Wallet must try miner.poh.ge/peers first. If unavailable or empty,
 // fall back to other bootnodes. Prefers direct /peers (fast list) then /ipfs/latest.
 
 const IPFS_GATEWAYS = [
@@ -25,7 +25,7 @@ async function fetchIPFSJSON(cid) {
  * Discover active miner peers.
  * 
  * 1. Tries each bootnode's /peers endpoint (direct list of verified peers with host+walletApiPort).
- *    Primary: miner.proofofhuman.ge/peers, then others.
+ *    Primary: miner.poh.ge/peers, then others.
  * 2. If no usable peers, falls back to /ipfs/latest + IPFS gateways for each bootnode.
  *
  * Returns array of node objects ready for the wallet nodes list:
@@ -34,7 +34,7 @@ async function fetchIPFSJSON(cid) {
 export async function discoverPeers() {
   const bootnodes = Array.isArray(DEFAULT_BOOTNODES) && DEFAULT_BOOTNODES.length
     ? DEFAULT_BOOTNODES
-    : ['https://miner.proofofhuman.ge'];
+    : ['https://miner.poh.ge'];
 
   // 1. Prefer direct /peers on each bootnode
   for (const base of bootnodes) {
@@ -129,7 +129,7 @@ export async function discoverPeersFromIPFS() {
 export async function fetchBrainWeightsFromIPFS() {
   const bootnodes = Array.isArray(DEFAULT_BOOTNODES) && DEFAULT_BOOTNODES.length
     ? DEFAULT_BOOTNODES
-    : ['https://miner.proofofhuman.ge'];
+    : ['https://miner.poh.ge'];
   for (const base of bootnodes) {
     try {
       const reg = await fetch(`${base.replace(/\/$/, '')}/ipfs/latest`, {
