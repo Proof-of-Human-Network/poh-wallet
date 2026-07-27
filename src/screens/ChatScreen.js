@@ -157,14 +157,30 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
   const [budget,     setBudget]     = useState(_pctToPoh(0)); // default preset = 1 kPOH (1000 μPOH)
   const [loading,    setLoading]    = useState(false);
   const [statusText, setStatusText] = useState('');
-  const [result,     setResult]     = useState(null);
-  const [error,      setError]      = useState(null);
+  // Messenger-style conversation: [{ id, role: 'user'|'ai', text?, error?, ...skill fields }]
+  const [messages,   setMessages]   = useState([]);
   const [attachedFile, setAttachedFile] = useState(null); // { name, content }
   const [suggestions, setSuggestions] = useState([]);
   const [historyBanner, setHistoryBanner] = useState(null);
+  const [feeOpen, setFeeOpen] = useState(false);
   const suggestTimerRef = useRef(null);
+  const scrollRef = useRef(null);
+  const msgIdRef = useRef(0);
 
   const balance = selectedAddress ? (balances?.[selectedAddress] ?? 0) : 0;
+
+  const pushMsg = (msg) => {
+    const id = ++msgIdRef.current;
+    setMessages(prev => [...prev, { id, ...msg }]);
+    return id;
+  };
+  const patchMsg = (id, patch) =>
+    setMessages(prev => prev.map(m => (m.id === id ? { ...m, ...patch } : m)));
+
+  const scrollToEnd = () => {
+    requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
+  };
+  useEffect(() => { scrollToEnd(); }, [messages, loading]);
 
   const loadSuggestions = useCallback(async (q) => {
     if (!activeNodeUrl || q.length < 2) {
@@ -206,7 +222,9 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
     if (!q || !activeNodeUrl) return;
     const match = await fetchHistoryMatch(activeNodeUrl, { q, wallet: selectedAddress });
     if (match?.reply) {
-      setResult({ type: 'chat', message: match.reply, fromChainHistory: true });
+      pushMsg({ role: 'user', text: q });
+      pushMsg({ role: 'ai', type: 'chat', text: match.reply, fromChainHistory: true });
+      setMessage('');
       setHistoryBanner(null);
       setSuggestions([]);
     }
@@ -269,20 +287,21 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
   // ── Submit ────────────────────────────────────────────────────────────────
   const submitText = async (q) => {
     if (!q) return;
-    if (!activeNodeUrl) { setError('No node connected. Check Settings.'); return; }
+    if (!activeNodeUrl) {
+      pushMsg({ role: 'ai', error: true, text: 'No node connected. Check Settings.' });
+      return;
+    }
 
     setLoading(true);
-    setResult(null);
-    setError(null);
 
     try {
       setStatusText('Thinking...');
       const { data: askData, base } = await askNode(q);
 
       if (askData.type === 'chat') {
-        setResult({
-          type: 'chat',
-          message: askData.message || askData.reply || '(no response)',
+        pushMsg({
+          role: 'ai', type: 'chat',
+          text: askData.message || askData.reply || '(no response)',
           fromChainHistory: !!askData.fromChainHistory,
         });
         setSuggestions([]);
@@ -294,18 +313,18 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
       // Skill path
       const maxBudget = Math.round(budget * 1_000_000_000);
       if (!(maxBudget > 0)) {
-        setLoading(false);
+        setFeeOpen(true);
         Alert.alert('Fee Required', 'This question needs a real-time data skill. Set a fee using the slider and try again.');
         return;
       }
-      if (!selectedAddress) { setError('Select a wallet to pay the skill fee.'); return; }
-      if (budget > balance)  { setError(`Insufficient balance: ${balance.toFixed(2)} POH available.`); return; }
+      if (!selectedAddress) { pushMsg({ role: 'ai', error: true, text: 'Select a wallet to pay the skill fee.' }); return; }
+      if (budget > balance)  { pushMsg({ role: 'ai', error: true, text: `Insufficient balance: ${balance.toFixed(2)} POH available.` }); return; }
 
       // Fee-required job types need a signed payment proof (paymentTx) bound to
       // jobId + miner + amount + nonce — the node rejects them with 402 otherwise.
       setStatusText('Signing fee payment...');
       const privateKeyHex = getPrivateKey ? await getPrivateKey(selectedAddress) : null;
-      if (!privateKeyHex) { setError('Private key not found for this wallet.'); setLoading(false); return; }
+      if (!privateKeyHex) { pushMsg({ role: 'ai', error: true, text: 'Private key not found for this wallet.' }); return; }
       const { secretKey, signingPublicKey } = await deriveSigningKeypair(privateKeyHex);
 
       // Register signing key (idempotent) so the node can verify the proof
@@ -365,17 +384,17 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
       setStatusText('Fetching result...');
       const rRes  = await fetch(`${base}/job/${jobId}/result`);
       const rData = await rRes.json();
-      setResult({
-        type: 'skill', skillId: askData.skillId,
+      pushMsg({
+        role: 'ai', type: 'skill', skillId: askData.skillId,
         jobId:      rData?.jobId || jobId,
         output:     rData?.profile?.skillOutput ?? rData,
-        nlResponse: rData?.profile?.nlResponse || null,
+        text:       rData?.profile?.nlResponse || null,
         tokensUsed: rData?.profile?.tokensUsed,
         feedback:   null,
       });
       setStatusText('');
     } catch (err) {
-      setError(err.message || 'Something went wrong.');
+      pushMsg({ role: 'ai', error: true, text: err.message || 'Something went wrong.' });
       setStatusText('');
     } finally {
       setLoading(false);
@@ -388,26 +407,30 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
     const q = attachedFile
       ? `${text}\n\n[Attached file: ${attachedFile.name}]\n\`\`\`\n${attachedFile.content}\n\`\`\``
       : text;
+    pushMsg({ role: 'user', text: text || `📎 ${attachedFile?.name}`, attachment: attachedFile?.name || null });
+    setMessage('');
+    setSuggestions([]);
+    setHistoryBanner(null);
     submitText(q);
     setAttachedFile(null);
   };
 
-  const copyResponse = async () => {
-    const text = result?.message || result?.nlResponse
-      || (typeof result?.output === 'string' ? result.output : JSON.stringify(result?.output, null, 2));
+  const copyMessage = async (msg) => {
+    const text = msg.text
+      || (typeof msg.output === 'string' ? msg.output : JSON.stringify(msg.output, null, 2));
     if (!text) return;
     await Clipboard.setStringAsync(text);
     Alert.alert('Copied', 'Response copied to clipboard');
   };
 
-  const sendFeedback = async (stars) => {
-    if (!result?.jobId || result.feedback) return;
+  const sendFeedback = async (msg, stars) => {
+    if (!msg.jobId || msg.feedback) return;
     try {
-      await fetch(`${activeNodeUrl.replace(/\/$/, '')}/api/jobs/${result.jobId}/feedback`, {
+      await fetch(`${activeNodeUrl.replace(/\/$/, '')}/api/jobs/${msg.jobId}/feedback`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stars, requesterAddress: selectedAddress }),
       });
-      setResult(r => ({ ...r, feedback: stars }));
+      patchMsg(msg.id, { feedback: stars });
     } catch { Alert.alert('Error', 'Could not submit feedback.'); }
   };
 
@@ -437,35 +460,104 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
     return <Text style={s.codeText}>{JSON.stringify(output, null, 2)}</Text>;
   };
 
-  const isSkillResult = result?.type === 'skill';
+  const renderAiBubble = (msg) => {
+    if (msg.error) {
+      return (
+        <View key={msg.id} style={[s.bubbleRow, s.bubbleRowAi]}>
+          <View style={[s.bubble, s.bubbleError]}>
+            <Text style={s.errorText}>{msg.text}</Text>
+          </View>
+        </View>
+      );
+    }
+    const isSkill = msg.type === 'skill';
+    return (
+      <View key={msg.id} style={[s.bubbleRow, s.bubbleRowAi]}>
+        <View style={[s.bubble, s.bubbleAi]}>
+          <View style={s.bubbleHeaderRow}>
+            <Text style={s.bubbleHeader}>
+              {isSkill
+                ? `${msg.skillId}${msg.tokensUsed ? `  ·  ${msg.tokensUsed} tokens` : ''}`
+                : msg.fromChainHistory ? 'AI · from chain history' : 'AI'}
+            </Text>
+            <TouchableOpacity style={s.copyBtn} onPress={() => copyMessage(msg)}>
+              <Text style={s.copyBtnText}>⎘</Text>
+            </TouchableOpacity>
+          </View>
 
-  const responseText = result?.type === 'chat'
-    ? result.message
-    : result?.nlResponse || null;
+          {msg.text ? renderMarkdown(msg.text) : renderSkillOutput(msg.output)}
+
+          {isSkill && (
+            msg.feedback ? (
+              <Text style={s.feedbackDone}>
+                Thanks! {'★'.repeat(msg.feedback)}{'☆'.repeat(5 - msg.feedback)}
+              </Text>
+            ) : (
+              <View style={s.feedbackRow}>
+                <Text style={s.feedbackLabel}>Rate this:</Text>
+                {[1, 2, 3, 4, 5].map(n => (
+                  <TouchableOpacity key={n} style={s.starBtn} onPress={() => sendFeedback(msg, n)}>
+                    <Text style={s.starBtnText}>★</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )
+          )}
+        </View>
+      </View>
+    );
+  };
+
+  const canSend = !loading && (message.trim() || attachedFile);
 
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: '#000' }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      {/* ── Conversation ── */}
       <ScrollView
+        ref={scrollRef}
         keyboardShouldPersistTaps="handled"
         style={{ flex: 1 }}
-        contentContainerStyle={s.content}
+        contentContainerStyle={s.chatContent}
+        onContentSizeChange={scrollToEnd}
       >
-        <TextInput
-          style={s.input}
-          placeholder="Ask the network anything…"
-          placeholderTextColor="#4b5563"
-          value={message}
-          onChangeText={setMessage}
-          multiline
-          numberOfLines={3}
-          autoCapitalize="none"
-          autoCorrect={false}
-          editable={!loading}
-        />
+        {messages.length === 0 && !loading ? (
+          <View style={s.emptyState}>
+            <Text style={s.emptyTitle}>Ask the network anything</Text>
+            <Text style={s.emptyHint}>
+              Answers come from AI miners on the PoH network.{'\n'}
+              Real-time data skills charge the fee you set below.
+            </Text>
+          </View>
+        ) : null}
 
+        {messages.map(msg =>
+          msg.role === 'user' ? (
+            <View key={msg.id} style={[s.bubbleRow, s.bubbleRowUser]}>
+              <View style={[s.bubble, s.bubbleUser]}>
+                {msg.attachment ? (
+                  <Text style={s.bubbleAttach}>📎 {msg.attachment}</Text>
+                ) : null}
+                <Text style={s.bubbleUserText}>{msg.text}</Text>
+              </View>
+            </View>
+          ) : renderAiBubble(msg)
+        )}
+
+        {loading ? (
+          <View style={[s.bubbleRow, s.bubbleRowAi]}>
+            <View style={[s.bubble, s.bubbleAi, s.bubbleTyping]}>
+              <ActivityIndicator color="#22c55e" size="small" />
+              <Text style={s.typingText}>{statusText || 'Thinking...'}</Text>
+            </View>
+          </View>
+        ) : null}
+      </ScrollView>
+
+      {/* ── Composer ── */}
+      <View style={s.composer}>
         {suggestions.length > 0 ? (
           <View style={s.suggestBox}>
             {suggestions.map((item, idx) => (
@@ -490,127 +582,142 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
           </View>
         ) : null}
 
-        <View style={s.attachRow}>
-          <TouchableOpacity style={s.attachBtn} onPress={pickAttachment} disabled={loading}>
-            <Text style={s.attachBtnText}>📎 Attach file</Text>
-          </TouchableOpacity>
-          {attachedFile ? (
+        {attachedFile ? (
+          <View style={s.attachChipRow}>
             <View style={s.attachChip}>
               <Text style={s.attachChipText} numberOfLines={1}>{attachedFile.name}</Text>
               <TouchableOpacity onPress={removeAttachment}>
                 <Text style={s.attachChipRemove}>×</Text>
               </TouchableOpacity>
             </View>
-          ) : null}
-        </View>
-
-        <View style={s.feeRow}>
-          <Text style={s.label}>MAX FEE <Text style={s.labelNote}>(data skills only)</Text></Text>
-          <Text style={s.feeValue}>{_fmtPoh(budget)}</Text>
-        </View>
-        <LogSlider value={budget} onChange={setBudget} disabled={loading} />
-        <View style={s.presetRow}>
-          {FEE_PRESETS.map(p => {
-            const pv = _pctToPoh(p.pct);
-            const active = Math.abs(_pohToStep(budget) - _pohToStep(pv)) <= 1;
-            return (
-              <TouchableOpacity
-                key={p.label}
-                style={[s.presetBtn, active && s.presetBtnActive]}
-                onPress={() => !loading && setBudget(pv)}
-                disabled={loading}
-              >
-                <Text style={[s.presetText, active && s.presetTextActive]}>{p.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-        <Text style={s.feeNote}>
-          Balance: {balance.toFixed(2)} POH · fee only charged when a data skill is used
-        </Text>
-
-        {error ? (
-          <View style={s.errorBox}><Text style={s.errorText}>{error}</Text></View>
-        ) : null}
-
-        <TouchableOpacity
-          style={[s.submitBtn, (loading || (!message.trim() && !attachedFile)) && s.submitBtnDisabled]}
-          onPress={submit}
-          disabled={loading || (!message.trim() && !attachedFile)}
-        >
-          {loading ? (
-            <View style={s.submitRow}>
-              <ActivityIndicator color="#000" size="small" />
-              <Text style={[s.submitBtnText, { marginLeft: 8 }]}>{statusText || 'Thinking...'}</Text>
-            </View>
-          ) : (
-            <Text style={s.submitBtnText}>Ask</Text>
-          )}
-        </TouchableOpacity>
-
-        {result ? (
-          <View style={s.resultBox}>
-            <View style={s.resultHeaderRow}>
-              <Text style={s.resultHeader}>
-                {isSkillResult
-                  ? `${result.skillId}${result.tokensUsed ? `  ·  ${result.tokensUsed} tokens` : ''}`
-                  : result.fromChainHistory ? 'AI · from chain history' : 'AI'}
-              </Text>
-              <TouchableOpacity style={s.copyBtn} onPress={copyResponse}>
-                <Text style={s.copyBtnText}>⎘ Copy</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView nestedScrollEnabled style={s.resultScroll}>
-              {responseText
-                ? renderMarkdown(responseText)
-                : renderSkillOutput(result.output)
-              }
-            </ScrollView>
-
-            {isSkillResult && (
-              result.feedback ? (
-                <Text style={s.feedbackDone}>
-                  Thanks! {'★'.repeat(result.feedback)}{'☆'.repeat(5 - result.feedback)}
-                </Text>
-              ) : (
-                <View style={s.feedbackRow}>
-                  <Text style={s.feedbackLabel}>Rate this:</Text>
-                  {[1, 2, 3, 4, 5].map(n => (
-                    <TouchableOpacity key={n} style={s.starBtn} onPress={() => sendFeedback(n)}>
-                      <Text style={s.starBtnText}>★</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )
-            )}
           </View>
         ) : null}
-      </ScrollView>
+
+        {feeOpen ? (
+          <View style={s.feePanel}>
+            <View style={s.feeRow}>
+              <Text style={s.label}>MAX FEE <Text style={s.labelNote}>(data skills only)</Text></Text>
+              <Text style={s.feeValue}>{_fmtPoh(budget)}</Text>
+            </View>
+            <LogSlider value={budget} onChange={setBudget} disabled={loading} />
+            <View style={s.presetRow}>
+              {FEE_PRESETS.map(p => {
+                const pv = _pctToPoh(p.pct);
+                const active = Math.abs(_pohToStep(budget) - _pohToStep(pv)) <= 1;
+                return (
+                  <TouchableOpacity
+                    key={p.label}
+                    style={[s.presetBtn, active && s.presetBtnActive]}
+                    onPress={() => !loading && setBudget(pv)}
+                    disabled={loading}
+                  >
+                    <Text style={[s.presetText, active && s.presetTextActive]}>{p.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Text style={s.feeNote}>
+              Balance: {balance.toFixed(2)} POH · fee only charged when a data skill is used
+            </Text>
+          </View>
+        ) : null}
+
+        <View style={s.inputRow}>
+          <TouchableOpacity style={s.roundBtn} onPress={pickAttachment} disabled={loading}>
+            <Text style={s.roundBtnText}>📎</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.roundBtn, feeOpen && s.roundBtnActive]}
+            onPress={() => setFeeOpen(o => !o)}
+          >
+            <Text style={[s.roundBtnText, { fontSize: 11, color: feeOpen ? '#22c55e' : '#6b7280' }]}>
+              {_fmtPoh(budget)}
+            </Text>
+          </TouchableOpacity>
+          <TextInput
+            style={s.input}
+            placeholder="Ask the network anything…"
+            placeholderTextColor="#4b5563"
+            value={message}
+            onChangeText={setMessage}
+            multiline
+            autoCapitalize="none"
+            autoCorrect={false}
+            editable={!loading}
+          />
+          <TouchableOpacity
+            style={[s.sendBtn, !canSend && s.sendBtnDisabled]}
+            onPress={submit}
+            disabled={!canSend}
+          >
+            {loading ? (
+              <ActivityIndicator color="#000" size="small" />
+            ) : (
+              <Text style={s.sendBtnText}>➤</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
     </KeyboardAvoidingView>
   );
 }
 
 const s = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 40 },
+  chatContent: { padding: 12, paddingBottom: 16, flexGrow: 1 },
 
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingTop: 80 },
+  emptyTitle: { color: '#22c55e', fontSize: 20, fontFamily: 'Iceland_400Regular', lineHeight: 29, letterSpacing: 1, marginBottom: 8 },
+  emptyHint:  { color: '#4b5563', fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 19, textAlign: 'center' },
+
+  // Bubbles
+  bubbleRow:     { flexDirection: 'row', marginBottom: 10 },
+  bubbleRowUser: { justifyContent: 'flex-end' },
+  bubbleRowAi:   { justifyContent: 'flex-start' },
+  bubble:        { maxWidth: '88%', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 9 },
+  bubbleUser:    { backgroundColor: '#14331d', borderWidth: 1, borderColor: '#1e4d2b', borderBottomRightRadius: 4 },
+  bubbleUserText:{ color: '#e5e7eb', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 21 },
+  bubbleAttach:  { color: '#22c55e', fontSize: 12, fontFamily: 'monospace', marginBottom: 4 },
+  bubbleAi:      { backgroundColor: '#0d0d0d', borderWidth: 1, borderColor: '#1f2f1f', borderBottomLeftRadius: 4 },
+  bubbleError:   { backgroundColor: '#1c0a0a', borderWidth: 1, borderColor: '#ef4444', borderBottomLeftRadius: 4 },
+  bubbleTyping:  { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  typingText:    { color: '#6b7280', fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 19 },
+
+  bubbleHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  bubbleHeader:    { color: '#22c55e', fontSize: 12, fontFamily: 'Iceland_400Regular', lineHeight: 17, letterSpacing: 1, flex: 1 },
+  copyBtn:         { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#2a2a2a', marginLeft: 8 },
+  copyBtnText:     { color: '#6b7280', fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 18 },
+
+  errorText: { color: '#ef4444', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20 },
+
+  // Composer
+  composer: { borderTopWidth: 1, borderTopColor: '#161616', backgroundColor: '#050505', padding: 10, paddingBottom: 12 },
+  inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6 },
+  input: {
+    flex: 1, backgroundColor: '#0d0d0d', color: '#fff',
+    paddingHorizontal: 12, paddingVertical: 9,
+    borderRadius: 18, fontSize: 13,
+    fontFamily: 'Iceland_400Regular', lineHeight: 19, borderWidth: 1, borderColor: '#222',
+    maxHeight: 110, minHeight: 38, textAlignVertical: 'center',
+  },
+  roundBtn:      { width: 38, height: 38, borderRadius: 19, borderWidth: 1, borderColor: '#222', backgroundColor: '#0d0d0d', alignItems: 'center', justifyContent: 'center' },
+  roundBtnActive:{ borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.12)' },
+  roundBtnText:  { fontSize: 15, color: '#9ca3af' },
+  sendBtn:         { width: 38, height: 38, borderRadius: 19, backgroundColor: '#22c55e', alignItems: 'center', justifyContent: 'center' },
+  sendBtnDisabled: { backgroundColor: '#166534', opacity: 0.6 },
+  sendBtnText:     { color: '#000', fontSize: 16, fontWeight: '700' },
+
+  // Fee panel (collapsible)
+  feePanel:  { marginBottom: 8, padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#1a1a1a', backgroundColor: '#0a0a0a' },
   label:     { color: '#4b5563', fontSize: 13, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular', lineHeight: 19 },
   labelNote: { color: '#374151', letterSpacing: 0, textTransform: 'none' },
   feeRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   feeValue:  { color: '#22c55e', fontSize: 15, fontFamily: 'Iceland_400Regular', lineHeight: 22 },
-  feeNote:   { color: '#374151', fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 19, marginBottom: 12, marginTop: 2 },
+  feeNote:   { color: '#374151', fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 19, marginTop: 6 },
   presetRow:      { flexDirection: 'row', justifyContent: 'space-between', gap: 6, marginTop: 8 },
   presetBtn:      { flex: 1, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#1f2937', alignItems: 'center', backgroundColor: '#0a0a0a' },
   presetBtnActive:{ borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.12)' },
   presetText:     { color: '#6b7280', fontSize: 12, letterSpacing: 1, fontFamily: 'Iceland_400Regular', lineHeight: 17 },
   presetTextActive:{ color: '#22c55e' },
-
-  input: {
-    backgroundColor: '#0d0d0d', color: '#fff', padding: 14,
-    borderRadius: 10, marginBottom: 8, fontSize: 13,
-    fontFamily: 'Iceland_400Regular', lineHeight: 19, borderWidth: 1, borderColor: '#222',
-    minHeight: 72, textAlignVertical: 'top',
-  },
 
   suggestBox: {
     backgroundColor: '#0a0a0a', borderRadius: 8, borderWidth: 1, borderColor: '#222',
@@ -622,7 +729,7 @@ const s = StyleSheet.create({
   suggestBadge: { color: '#22c55e', fontSize: 10, fontFamily: 'monospace', marginTop: 3 },
 
   historyBanner: {
-    backgroundColor: '#0f1f14', borderRadius: 8, padding: 10, marginBottom: 10,
+    backgroundColor: '#0f1f14', borderRadius: 8, padding: 10, marginBottom: 8,
     borderWidth: 1, borderColor: '#1e3a2a',
   },
   historyBannerLabel: { color: '#4ade80', fontSize: 11, fontFamily: 'Iceland_400Regular', lineHeight: 16, marginBottom: 4 },
@@ -630,27 +737,10 @@ const s = StyleSheet.create({
   historyBannerBtn: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 4, borderWidth: 1, borderColor: '#22c55e', backgroundColor: '#166534' },
   historyBannerBtnText: { color: '#22c55e', fontSize: 11, fontFamily: 'monospace' },
 
-  errorBox:  { backgroundColor: '#1c0a0a', borderRadius: 8, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#ef4444' },
-  errorText: { color: '#ef4444', fontSize: 15, fontFamily: 'Iceland_400Regular', lineHeight: 22 },
-
-  attachRow:       { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8, flexWrap: 'wrap' },
-  attachBtn:       { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#2a2a2a', backgroundColor: '#0d0d0d' },
-  attachBtnText:   { color: '#9ca3af', fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 19 },
-  attachChip:      { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: '#111', borderWidth: 1, borderColor: '#222', maxWidth: 200 },
+  attachChipRow:   { flexDirection: 'row', marginBottom: 8 },
+  attachChip:      { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: '#111', borderWidth: 1, borderColor: '#222', maxWidth: 220 },
   attachChipText:  { color: '#22c55e', fontSize: 12, fontFamily: 'monospace', flexShrink: 1 },
   attachChipRemove: { color: '#f87171', fontSize: 16, fontWeight: '700', paddingHorizontal: 2 },
-
-  submitBtn:         { backgroundColor: '#22c55e', padding: 14, borderRadius: 4, alignItems: 'center', marginBottom: 14 },
-  submitBtnDisabled: { backgroundColor: '#166534', opacity: 0.7 },
-  submitBtnText:     { color: '#000', fontWeight: '700', fontSize: 16, fontFamily: 'Iceland_400Regular', lineHeight: 23 },
-  submitRow:         { flexDirection: 'row', alignItems: 'center' },
-
-  resultBox:       { backgroundColor: '#0a0a0a', borderRadius: 10, padding: 14, borderWidth: 1, borderColor: '#1f2f1f' },
-  resultHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  resultHeader:    { color: '#22c55e', fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 19, letterSpacing: 1, flex: 1 },
-  copyBtn:         { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4, borderWidth: 1, borderColor: '#2a2a2a' },
-  copyBtnText:     { color: '#6b7280', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20 },
-  resultScroll:    { maxHeight: 400 },
 
   // Markdown styles
   resultText:  { color: '#e5e7eb', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 22 },
@@ -660,15 +750,15 @@ const s = StyleSheet.create({
   mdBullet:    { color: '#e5e7eb', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 22, marginBottom: 2, paddingLeft: 4 },
   mdRule:      { height: 1, backgroundColor: '#222', marginVertical: 10 },
   inlineCode:  { fontFamily: 'monospace', backgroundColor: '#1a1a1a', color: '#22c55e', borderRadius: 3, paddingHorizontal: 3 },
-  codeBlock:   { backgroundColor: '#0d0d0d', borderRadius: 8, padding: 12, marginVertical: 8, borderWidth: 1, borderColor: '#222' },
+  codeBlock:   { backgroundColor: '#161616', borderRadius: 8, padding: 12, marginVertical: 8, borderWidth: 1, borderColor: '#222' },
   codeText:    { color: '#9ca3af', fontSize: 13, fontFamily: 'monospace', lineHeight: 18 },
 
   postRow:     { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#1a1a1a' },
   postTitle:   { color: '#fff', fontSize: 15, fontFamily: 'Iceland_400Regular', lineHeight: 22, marginBottom: 4 },
 
-  feedbackRow:  { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 4 },
+  feedbackRow:  { flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 4 },
   feedbackLabel: { color: '#4b5563', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20, marginRight: 4 },
   starBtn:      { padding: 2 },
   starBtnText:  { fontSize: 20, color: '#374151' },
-  feedbackDone: { color: '#6b7280', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20, marginTop: 12 },
+  feedbackDone: { color: '#6b7280', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20, marginTop: 10 },
 });
