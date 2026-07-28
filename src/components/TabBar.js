@@ -6,7 +6,6 @@ const TABS = [
   { key: 'history', icon: '⇄', iconOff: '⇄', labelKey: 'tab.history' },
   { key: 'p2p',     icon: '⇋', iconOff: '⇋', label: 'P2P' },
   { key: 'chat',    icon: '✦', iconOff: '✦', label: 'Ask AI' },
-  { key: 'search',  icon: '⊙', iconOff: '⊙', label: 'Scan' },
 ];
 
 export default function TabBar({ currentScreen, onTabPress, t }) {

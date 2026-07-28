@@ -41,7 +41,6 @@ import {
   HistoryScreen,
   WalletsScreen,
   SettingsScreen,
-  AIScreen,
   ChatScreen,
   P2PScreen,
   CreateOrderScreen,
@@ -1125,10 +1124,6 @@ export default function PoHMinerWallet() {
             <Text style={styles.actionIcon}>↓</Text>
             <Text style={styles.actionText}>{t('action.receive')}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => setCurrentScreen('search')}>
-            <Text style={[styles.actionIcon, { color: '#22c55e' }]}>⊙</Text>
-            <Text style={styles.actionText}>Scan</Text>
-          </TouchableOpacity>
         </View>
 
         {/* Recent */}
@@ -1494,19 +1489,6 @@ export default function PoHMinerWallet() {
             balances={balances}
             getPrivateKey={getPrivateKey}
           />
-        </View>
-        <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
-      </SafeAreaView>
-    );
-  }
-
-  if (currentScreen === 'search') {
-    return (
-      <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
-        <StatusBar barStyle="light-content" />
-        <Header title="Identity Scanner" t={t} onSettingsPress={() => setCurrentScreen('settings')} />
-        <View style={{ flex: 1 }}>
-          <AIScreen t={t} wallets={wallets} selectedAddress={selectedAddress} balances={balances} setSelectedAddress={setSelectedAddress} saveSelectedAddress={saveSelected} activeNodeUrl={activeNodeUrl} nodes={nodes} />
         </View>
         <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
       </SafeAreaView>
