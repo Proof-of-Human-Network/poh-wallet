@@ -27,6 +27,7 @@ import {
   signData,
   buildSignedTransaction,
 } from './src/services/signing';
+import { ASSETS as CHAIN_ASSETS, STABLE_TICKERS, assetMeta } from './src/constants/assets';
 import {
   selectBestNode,
   discoverPeers,
@@ -131,7 +132,9 @@ export default function PoHMinerWallet() {
   const [p2pParams, setP2pParams] = useState({});
   const [wallets, setWallets] = useState([]); // {address, createdAt}[]
   const [selectedAddress, setSelectedAddress] = useState(null);
-  const [balances, setBalances] = useState({}); // address -> number
+  const [balances, setBalances] = useState({}); // address -> number (POH display units)
+  const [assetBalances, setAssetBalances] = useState({}); // address -> { ticker: displayNumber } (stablecoins)
+  const [sendCurrency, setSendCurrency] = useState('POH'); // asset picked in the Send screen
   const [txs, setTxs] = useState([]);
   const [localPendingTxs, setLocalPendingTxs] = useState([]);
 
@@ -406,6 +409,16 @@ export default function PoHMinerWallet() {
         const newBal = data.balance / POH_DECIMALS; // μPOH → POH
 
         setBalances(prev => ({ ...prev, [address]: newBal }));
+
+        // Per-asset stablecoin balances (aiGEL … in display units)
+        if (data.assets && typeof data.assets === 'object') {
+          const held = {};
+          for (const [tk, v] of Object.entries(data.assets)) {
+            const disp = typeof v === 'object' ? (v.display ?? 0) : 0;
+            if (disp > 0) held[tk] = disp;
+          }
+          setAssetBalances(prev => ({ ...prev, [address]: held }));
+        }
 
         // Detect incoming funds -> notification
         if (newBal > oldBal && oldBal > 0) {
@@ -956,7 +969,11 @@ export default function PoHMinerWallet() {
       Alert.alert(t('send.no_wallet'));
       return;
     }
-    if (amount + fee > currentBalance) {
+    // Balance check in the asset being sent (POH scalar vs per-asset map)
+    const availableBal = sendCurrency === 'POH'
+      ? currentBalance
+      : ((assetBalances[selectedAddress] || {})[sendCurrency] || 0);
+    if (amount + fee > availableBal) {
       Alert.alert(t('error'), t('send.insufficient'));
       return;
     }
@@ -1005,7 +1022,7 @@ export default function PoHMinerWallet() {
         const nonce = Math.max(nonceData.nonce || 0, nonceData.pendingNonce || 0) + 1;
 
         // Build and sign the transaction (signingPublicKey required by node's verify())
-        signedTx = await buildSignedTransaction({ from: selectedAddress, to, amount, fee, nonce, secretKey, signingPublicKey });
+        signedTx = await buildSignedTransaction({ from: selectedAddress, to, amount, fee, nonce, currency: sendCurrency, secretKey, signingPublicKey });
         pendingSendRef.current = { key: sendKey, signedTx };
       }
 
@@ -1101,6 +1118,15 @@ export default function PoHMinerWallet() {
           {pohUsdRate !== null && (
             <Text style={styles.usd}>≈ ${(currentBalance * pohUsdRate).toFixed(2)} USD</Text>
           )}
+          {/* Stablecoin holdings — one row per non-zero asset */}
+          {Object.entries(assetBalances[selectedAddress] || {}).filter(([, v]) => v > 0).map(([tk, v]) => (
+            <View key={tk} style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+              <Text style={{ color: '#9ca3af', fontSize: 13 }}>{assetMeta(tk).display}</Text>
+              <Text style={{ color: '#e5e7eb', fontSize: 13 }}>
+                {v.toFixed(2)} {assetMeta(tk).sign}
+              </Text>
+            </View>
+          ))}
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
             {loading && <ActivityIndicator color="#22c55e" size="small" style={{ marginRight: 8 }} />}
             <TouchableOpacity onPress={copyAddress} style={{ flex: 1 }}>
@@ -1230,17 +1256,40 @@ export default function PoHMinerWallet() {
               keyboardType="decimal-pad"
               textAlign="center"
             />
-            <Text style={styles.amountCurrency}>POH</Text>
-            <Text style={styles.amountAvail}>Available: {currentBalance.toFixed(2)} POH</Text>
+            <Text style={styles.amountCurrency}>{assetMeta(sendCurrency).display}</Text>
+            <Text style={styles.amountAvail}>
+              Available: {(sendCurrency === 'POH'
+                ? currentBalance
+                : ((assetBalances[selectedAddress] || {})[sendCurrency] || 0)
+              ).toFixed(2)} {assetMeta(sendCurrency).display}
+            </Text>
+          </View>
+
+          {/* Asset picker — POH + any stablecoins this wallet holds */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+            {['POH', ...STABLE_TICKERS.filter(tk => ((assetBalances[selectedAddress] || {})[tk] || 0) > 0)].map(tk => (
+              <TouchableOpacity
+                key={tk}
+                onPress={() => setSendCurrency(tk)}
+                style={{
+                  paddingVertical: 4, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1,
+                  borderColor: sendCurrency === tk ? '#22c55e' : '#1f2937',
+                  backgroundColor: sendCurrency === tk ? '#052e16' : 'transparent',
+                }}>
+                <Text style={{ color: sendCurrency === tk ? '#22c55e' : '#6b7280', fontSize: 11 }}>
+                  {assetMeta(tk).display}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
             {[1, 5, 10].map(amt => (
               <TouchableOpacity key={amt} style={styles.presetBtn} onPress={() => setSendAmount(String(amt))}>
-                <Text style={styles.presetText}>{amt} POH</Text>
+                <Text style={styles.presetText}>{amt} {assetMeta(sendCurrency).display}</Text>
               </TouchableOpacity>
             ))}
-            <TouchableOpacity style={styles.presetBtn} onPress={() => setSendAmount(String(Math.max(0, currentBalance - fee).toFixed(3)))}>
+            <TouchableOpacity style={styles.presetBtn} onPress={() => setSendAmount(String(Math.max(0, (sendCurrency === 'POH' ? currentBalance : ((assetBalances[selectedAddress] || {})[sendCurrency] || 0)) - fee).toFixed(sendCurrency === 'POH' ? 3 : 2)))}>
               <Text style={styles.presetText}>MAX</Text>
             </TouchableOpacity>
           </View>
@@ -1250,7 +1299,7 @@ export default function PoHMinerWallet() {
               <Text style={[styles.fieldLabel, { marginBottom: 8 }]}>SUMMARY</Text>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Sending</Text>
-                <Text style={styles.summaryValue}>{amountNum.toFixed(2)} POH</Text>
+                <Text style={styles.summaryValue}>{amountNum.toFixed(2)} {assetMeta(sendCurrency).display}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>To</Text>
@@ -1260,7 +1309,7 @@ export default function PoHMinerWallet() {
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Fee</Text>
-                <Text style={[styles.summaryValue, { color: '#374151' }]}>{fee} POH</Text>
+                <Text style={[styles.summaryValue, { color: '#374151' }]}>{fee} {assetMeta(sendCurrency).display}</Text>
               </View>
             </View>
           ) : null}

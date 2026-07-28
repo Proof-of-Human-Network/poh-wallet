@@ -58,8 +58,12 @@ export function signData(data, secretKey) {
  * (not +1 — the node checks against walletManager.getNonce()).
  * `amount` is in μPOH and must equal the job's maxBudget.
  */
-export async function buildJobPaymentTx({ jobId, requesterAddress, minerAddress, amount, nonce, secretKey }) {
-  const payload = JSON.stringify({ jobId, requesterAddress, minerAddress, amount, nonce });
+export async function buildJobPaymentTx({ jobId, requesterAddress, minerAddress, amount, nonce, currency, secretKey }) {
+  // LOCKSTEP with node computeJobPaymentHash: `currency` joins the preimage as
+  // the SIXTH key ONLY when non-POH — POH payments keep the historical hash.
+  const payload = (currency && currency !== 'POH')
+    ? JSON.stringify({ jobId, requesterAddress, minerAddress, amount, nonce, currency })
+    : JSON.stringify({ jobId, requesterAddress, minerAddress, amount, nonce });
   const txHash = await Crypto.digestStringAsync(
     Crypto.CryptoDigestAlgorithm.SHA256,
     payload,
@@ -75,12 +79,19 @@ export async function buildJobPaymentTx({ jobId, requesterAddress, minerAddress,
  * amount is in display POH units (e.g. 1.5); converted internally to μPOH.
  * nonce must be currentConfirmedNonce + 1.
  */
-export async function buildSignedTransaction({ from, to, amount, fee = 0, nonce, memo = '', secretKey, signingPublicKey }) {
-  const amountMicro = Math.round(parseFloat(amount) * POH_DECIMALS);
+export async function buildSignedTransaction({ from, to, amount, fee = 0, nonce, memo = '', currency = 'POH', secretKey, signingPublicKey }) {
+  // Per-asset decimals: POH ×1e9 (μPOH), stablecoins ×100 (2dp raw units).
+  const decimals = (!currency || currency === 'POH') ? 9 : 2;
+  const amountMicro = Math.round(parseFloat(amount) * 10 ** decimals);
   const timestamp = Date.now();
 
-  // txHash must match PoHTransaction._computeHash() on the node
-  const payload = JSON.stringify({ from, to, amount: amountMicro, fee, nonce, timestamp, memo });
+  // txHash must match PoHTransaction._computeHash() on the node. LOCKSTEP rule:
+  // `currency` joins the preimage after memo ONLY when non-POH — a POH tx hashes
+  // byte-identically to the historical shape (and carries no currency key).
+  const isStable = currency && currency !== 'POH';
+  const payload = isStable
+    ? JSON.stringify({ from, to, amount: amountMicro, fee, nonce, timestamp, memo, currency })
+    : JSON.stringify({ from, to, amount: amountMicro, fee, nonce, timestamp, memo });
   const txHash = await Crypto.digestStringAsync(
     Crypto.CryptoDigestAlgorithm.SHA256,
     payload,
@@ -90,5 +101,9 @@ export async function buildSignedTransaction({ from, to, amount, fee = 0, nonce,
   const signature = signData(txHash, secretKey);
 
   // signingPublicKey is required by PoHTransaction.verify() on the node
-  return { from, to, amount: amountMicro, fee, nonce, timestamp, memo, txHash, signature, signingPublicKey };
+  return {
+    from, to, amount: amountMicro, fee, nonce, timestamp, memo,
+    ...(isStable ? { currency } : {}),
+    txHash, signature, signingPublicKey,
+  };
 }

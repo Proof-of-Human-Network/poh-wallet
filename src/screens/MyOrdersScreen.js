@@ -4,11 +4,20 @@ import {
   ActivityIndicator, RefreshControl, Alert,
 } from 'react-native';
 import { fetchMyOrders, fetchMyTrades, cancelOrder } from '../services/p2pClient';
+import { assetMeta } from '../constants/assets';
 
 const POH_DECIMALS = 1_000_000_000;
 
 function formatPOH(uPOH) {
-  return (uPOH / 1e9).toLocaleString(undefined, { maximumFractionDigits: 4 });
+  return (uPOH / 1e9).toLocaleString(undefined, { maximumFractionDigits: 4 }
+
+// Base-asset aware: orders may sell a stablecoin (order.baseAsset) instead of POH.
+function formatBase(order) {
+  const t = (order && order.baseAsset) || 'POH';
+  const a = assetMeta(t);
+  return `${(order.pohAmount / 10 ** a.decimals).toLocaleString(undefined, { maximumFractionDigits: a.decimals === 2 ? 2 : 4 })} ${a.display}`;
+}
+);
 }
 
 function timeAgo(ts) {
@@ -49,7 +58,7 @@ export default function MyOrdersScreen({ selectedAddress, activeNodeUrl, getPriv
   const onRefresh = () => { setRefreshing(true); loadData(true); };
 
   const doCancel = async (order) => {
-    Alert.alert('Cancel Order', `Cancel your ${order.side} order for ${formatPOH(order.pohAmount)} POH?`, [
+    Alert.alert('Cancel Order', `Cancel your ${order.side} order for ${formatBase(order)}?`, [
       { text: 'No', style: 'cancel' },
       {
         text: 'Yes, Cancel',
@@ -80,7 +89,7 @@ export default function MyOrdersScreen({ selectedAddress, activeNodeUrl, getPriv
             {(order.side || '').toUpperCase()}
           </Text>
         </View>
-        <Text style={styles.cardTitle}>{formatPOH(order.pohAmount)} POH</Text>
+        <Text style={styles.cardTitle}>{formatBase(order)}</Text>
         <Text style={styles.cardMeta}>
           {order.pricePerPOH} {order.quoteCurrency}/POH · Limit {order.minTrade}–{order.maxTrade?.toFixed(2)} {order.quoteCurrency}
         </Text>

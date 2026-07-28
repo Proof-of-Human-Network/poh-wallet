@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { fetchChatSuggestions, fetchHistoryMatch } from '../services/nodeClient';
 import { deriveSigningKeypair, signData, buildJobPaymentTx } from '../services/signing';
+import { STABLE_TICKERS, assetMeta } from '../constants/assets';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   ActivityIndicator, StyleSheet, Alert, PanResponder,
@@ -155,6 +156,9 @@ const POLL_TIMEOUT_MS  = 120_000;
 export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress, balances, getPrivateKey }) {
   const [message,    setMessage]    = useState('');
   const [budget,     setBudget]     = useState(_pctToPoh(0)); // default preset = 1 kPOH (1000 μPOH)
+  // Fee currency — POH (log slider) or a stablecoin (budget in display units,
+  // converted to 2dp raw at submit). Miner receives exactly this currency.
+  const [feeCurrency, setFeeCurrency] = useState('POH');
   const [loading,    setLoading]    = useState(false);
   const [statusText, setStatusText] = useState('');
   // Messenger-style conversation: [{ id, role: 'user'|'ai', text?, error?, ...skill fields }]
@@ -310,15 +314,16 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
         return;
       }
 
-      // Skill path
-      const maxBudget = Math.round(budget * 1_000_000_000);
+      // Skill path — budget converts at the fee currency's own decimals
+      const feeDecimals = feeCurrency === 'POH' ? 1_000_000_000 : 100;
+      const maxBudget = Math.max(feeCurrency === 'POH' ? 0 : 1, Math.round(budget * feeDecimals));
       if (!(maxBudget > 0)) {
         setFeeOpen(true);
         Alert.alert('Fee Required', 'This question needs a real-time data skill. Set a fee using the slider and try again.');
         return;
       }
       if (!selectedAddress) { pushMsg({ role: 'ai', error: true, text: 'Select a wallet to pay the skill fee.' }); return; }
-      if (budget > balance)  { pushMsg({ role: 'ai', error: true, text: `Insufficient balance: ${balance.toFixed(2)} POH available.` }); return; }
+      if (feeCurrency === 'POH' && budget > balance) { pushMsg({ role: 'ai', error: true, text: `Insufficient balance: ${balance.toFixed(2)} POH available.` }); return; }
 
       // Fee-required job types need a signed payment proof (paymentTx) bound to
       // jobId + miner + amount + nonce — the node rejects them with 402 otherwise.
@@ -351,6 +356,7 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
         minerAddress: info.minerAddress,
         amount: maxBudget,
         nonce: nonceData.nonce || 0,
+        currency: feeCurrency,
         secretKey,
       });
 
@@ -362,7 +368,7 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
           id: clientJobId,
           type: 'skill', skillId: askData.skillId,
           payload: { ...(askData.input || {}), question: q },
-          maxBudget, requesterAddress: selectedAddress,
+          maxBudget, currency: feeCurrency, requesterAddress: selectedAddress,
           paymentTx,
         }),
       });
@@ -597,7 +603,24 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
           <View style={s.feePanel}>
             <View style={s.feeRow}>
               <Text style={s.label}>MAX FEE <Text style={s.labelNote}>(data skills only)</Text></Text>
-              <Text style={s.feeValue}>{_fmtPoh(budget)}</Text>
+              <Text style={s.feeValue}>{feeCurrency === 'POH' ? _fmtPoh(budget) : `${budget.toFixed(2)} ${assetMeta(feeCurrency).display}`}</Text>
+            </View>
+            {/* Fee currency chips — the miner receives exactly this currency */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+              {['POH', ...STABLE_TICKERS].map(tk => (
+                <TouchableOpacity
+                  key={tk}
+                  onPress={() => { setFeeCurrency(tk); if (tk !== 'POH' && budget < 0.01) setBudget(0.01); }}
+                  style={{
+                    paddingVertical: 3, paddingHorizontal: 9, borderRadius: 11, borderWidth: 1,
+                    borderColor: feeCurrency === tk ? '#22c55e' : '#1f2937',
+                    backgroundColor: feeCurrency === tk ? '#052e16' : 'transparent',
+                  }}>
+                  <Text style={{ color: feeCurrency === tk ? '#22c55e' : '#6b7280', fontSize: 10 }}>
+                    {assetMeta(tk).display}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
             <LogSlider value={budget} onChange={setBudget} disabled={loading} />
             <View style={s.presetRow}>
@@ -631,7 +654,7 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
             onPress={() => setFeeOpen(o => !o)}
           >
             <Text style={[s.roundBtnText, { fontSize: 11, color: feeOpen ? '#22c55e' : '#6b7280' }]}>
-              {_fmtPoh(budget)}
+              {feeCurrency === 'POH' ? _fmtPoh(budget) : `${budget.toFixed(2)} ${assetMeta(feeCurrency).display}`}
             </Text>
           </TouchableOpacity>
           <TextInput

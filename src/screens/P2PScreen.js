@@ -4,6 +4,7 @@ import {
   ActivityIndicator, ScrollView, RefreshControl,
 } from 'react-native';
 import { fetchOrders, fetchCurrencies } from '../services/p2pClient';
+import { assetMeta } from '../constants/assets';
 
 const CURRENCIES = [
   'All', 'USDT-ERC20', 'USDT-TRC20', 'USDT-TON', 'USDT-SOL', 'USDT-BEP20',
@@ -11,7 +12,15 @@ const CURRENCIES = [
 ];
 
 function formatPOH(uPOH) {
-  return (uPOH / 1e9).toLocaleString(undefined, { maximumFractionDigits: 4 });
+  return (uPOH / 1e9).toLocaleString(undefined, { maximumFractionDigits: 4 }
+
+// Base-asset aware: orders may sell a stablecoin (order.baseAsset) instead of POH.
+function formatBase(order) {
+  const t = (order && order.baseAsset) || 'POH';
+  const a = assetMeta(t);
+  return `${(order.pohAmount / 10 ** a.decimals).toLocaleString(undefined, { maximumFractionDigits: a.decimals === 2 ? 2 : 4 })} ${a.display}`;
+}
+);
 }
 
 function timeAgo(ts) {
@@ -46,7 +55,7 @@ export default function P2PScreen({ selectedAddress, activeNodeUrl, onNavigate }
   const onRefresh = () => { setRefreshing(true); load(true); };
 
   const renderOrder = ({ item: order }) => {
-    const pohDisplay = formatPOH(order.pohAmount);
+    const pohDisplay = formatBase(order);
     return (
       <TouchableOpacity
         style={styles.orderCard}
@@ -59,7 +68,7 @@ export default function P2PScreen({ selectedAddress, activeNodeUrl, onNavigate }
           <Text style={[styles.sideBadge, styles.sellBadge]}>SELL</Text>
         </View>
         <View style={styles.orderRow}>
-          <Text style={styles.orderMeta}>Amount: {pohDisplay} POH</Text>
+          <Text style={styles.orderMeta}>Amount: {pohDisplay}</Text>
           <Text style={styles.orderMeta}>Limit: {order.minTrade}–{order.maxTrade?.toFixed(2)} {order.quoteCurrency}</Text>
         </View>
         <View style={styles.orderRow}>

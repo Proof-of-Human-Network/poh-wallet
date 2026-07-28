@@ -4,6 +4,7 @@ import {
   Alert, ActivityIndicator, TextInput,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import { assetMeta } from '../constants/assets';
 import {
   fetchTrade, fetchOrder, selectOrder,
   markPaymentSent, releaseTrade, cancelTrade, disputeTrade,
@@ -12,7 +13,15 @@ import {
 const POH_DECIMALS = 1_000_000_000;
 
 function formatPOH(uPOH) {
-  return (uPOH / 1e9).toLocaleString(undefined, { maximumFractionDigits: 4 });
+  return (uPOH / 1e9).toLocaleString(undefined, { maximumFractionDigits: 4 }
+
+// Base-asset aware: orders may sell a stablecoin (order.baseAsset) instead of POH.
+function formatBase(order) {
+  const t = (order && order.baseAsset) || 'POH';
+  const a = assetMeta(t);
+  return `${(order.pohAmount / 10 ** a.decimals).toLocaleString(undefined, { maximumFractionDigits: a.decimals === 2 ? 2 : 4 })} ${a.display}`;
+}
+);
 }
 
 function formatCountdown(ms) {
@@ -100,9 +109,10 @@ export default function TradeScreen({
 
   const doSelect = async () => {
     const poh = parseFloat(pohInput);
-    if (!poh || poh <= 0) return Alert.alert('Invalid', 'Enter a valid POH amount.');
+    if (!poh || poh <= 0) return Alert.alert('Invalid', 'Enter a valid amount.');
     if (!order) return;
-    const pohMicro = Math.round(poh * POH_DECIMALS);
+    const baseDec = 10 ** assetMeta((order && order.baseAsset) || 'POH').decimals;
+    const pohMicro = Math.round(poh * baseDec);
     const quoteAmount = poh * order.pricePerPOH;
     if (quoteAmount < (order.minTrade || 0)) return Alert.alert('Too small', `Minimum trade: ${order.minTrade} ${order.quoteCurrency}`);
     if (order.maxTrade && quoteAmount > order.maxTrade) return Alert.alert('Too large', `Maximum trade: ${order.maxTrade} ${order.quoteCurrency}`);
@@ -170,7 +180,7 @@ export default function TradeScreen({
             <Text style={styles.bigPrice}>{order.pricePerPOH} <Text style={styles.green}>{order.quoteCurrency}</Text></Text>
             <Text style={[styles.badge, styles.sellBadge]}>SELL</Text>
           </View>
-          <Text style={styles.meta}>Available: {formatPOH(order.pohAmount)} POH</Text>
+          <Text style={styles.meta}>Available: {formatBase(order)}</Text>
           <Text style={styles.meta}>Limit: {order.minTrade} – {order.maxTrade?.toFixed(2)} {order.quoteCurrency}</Text>
           <Text style={styles.meta}>Maker: {order.maker?.slice(0, 24)}…</Text>
         </View>
