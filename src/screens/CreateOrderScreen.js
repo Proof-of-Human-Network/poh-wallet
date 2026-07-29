@@ -4,13 +4,17 @@ import {
   ScrollView, Alert, ActivityIndicator,
 } from 'react-native';
 import { createOrder, applyReferralCode } from '../services/p2pClient';
+import { STABLE_TICKERS, assetMeta } from '../constants/assets';
 
 const POH_DECIMALS = 1_000_000_000;
 
 const CURRENCIES = [
   'USDT-ERC20', 'USDT-TRC20', 'USDT-TON', 'USDT-SOL', 'USDT-BEP20',
-  'BTC', 'ETH', 'SOL', 'USDC-ERC20',
+  'BTC', 'ETH', 'SOL', 'USDC-ERC20', 'Bank Transfer',
 ];
+
+// On-chain assets: usable as the SELL (base) asset, and as an atomic quote leg.
+const ONCHAIN = ['POH', ...STABLE_TICKERS];
 
 const NETWORK_OPTIONS = {
   'USDT-ERC20':  ['ERC20'],
@@ -31,7 +35,10 @@ function defaultNetwork(cur) {
 
 export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getPrivateKey, onNavigate }) {
   const side = 'sell';
+  const [baseAsset, setBaseAsset] = useState('POH');
   const [quoteCurrency, setQuoteCurrency] = useState('USDT-ERC20');
+  // On-chain quote → atomic swap (settles instantly, no payment methods needed)
+  const atomic = ONCHAIN.includes(quoteCurrency);
   const [pohAmount, setPohAmount] = useState('');
   const [pricePerPOH, setPricePerPOH] = useState('');
   const [minTrade, setMinTrade] = useState('');
@@ -60,10 +67,11 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
     if (!selectedAddress) return Alert.alert('No wallet', 'Select a wallet first.');
     const poh = parseFloat(pohAmount);
     const price = parseFloat(pricePerPOH);
-    if (!poh || poh <= 0) return Alert.alert('Invalid', 'Enter a valid POH amount.');
+    if (!poh || poh <= 0) return Alert.alert('Invalid', `Enter a valid ${assetMeta(baseAsset).display} amount.`);
     if (!price || price <= 0) return Alert.alert('Invalid', 'Enter a valid price.');
-    const validMethods = methods.filter(m => m.network.trim());
-    if (validMethods.length === 0) return Alert.alert('Invalid', 'Add at least one payment method.');
+    if (baseAsset === quoteCurrency) return Alert.alert('Invalid', 'Sell asset and payment currency must differ.');
+    const validMethods = atomic ? [] : methods.filter(m => m.network.trim());
+    if (!atomic && validMethods.length === 0) return Alert.alert('Invalid', 'Add at least one payment method.');
 
     setSubmitting(true);
     try {
@@ -75,7 +83,8 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
         await applyReferralCode(activeNodeUrl, selectedAddress, referralCode.trim().toUpperCase(), privateKey).catch(() => {});
       }
 
-      const pohAmountMicro = Math.round(poh * POH_DECIMALS);
+      const baseDecimals = assetMeta(baseAsset).decimals;
+      const pohAmountMicro = Math.round(poh * 10 ** baseDecimals);
       const minVal = parseFloat(minTrade) || 0;
       const maxVal = parseFloat(maxTrade) || (poh * price);
 
@@ -84,6 +93,8 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
         privateKeyHex: privateKey,
         side,
         pohAmount: pohAmountMicro,
+        baseAsset,
+        baseDecimals,
         quoteCurrency,
         pricePerPOH: price,
         minTrade: minVal,
@@ -94,7 +105,7 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
       if (result.error) {
         Alert.alert('Error', result.error);
       } else {
-        Alert.alert('Order Posted', `Your sell order for ${pohAmount} POH has been posted. POH is locked in escrow.`, [
+        Alert.alert('Order Posted', `Your sell order for ${pohAmount} ${assetMeta(baseAsset).display} has been posted — locked in escrow.${atomic ? ' It settles atomically when taken.' : ''}`, [
           { text: 'OK', onPress: () => onNavigate('p2p') },
         ]);
       }
@@ -117,12 +128,30 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
 
       {/* Side — sell only */}
       <View style={styles.section}>
-        <Text style={styles.hint}>You offer POH for sale — POH is locked in escrow until the buyer pays off-chain, then you release.</Text>
+        <Text style={styles.hint}>{atomic
+          ? `You sell ${assetMeta(baseAsset).display} for ${assetMeta(quoteCurrency).display} — locked in escrow, settles atomically on-chain when taken. No payment step.`
+          : `You offer ${assetMeta(baseAsset).display} for sale — locked in escrow until the buyer pays off-chain, then you release.`}</Text>
+      </View>
+
+      {/* Sell asset (base) */}
+      <View style={styles.section}>
+        <Text style={styles.label}>Sell Asset</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {ONCHAIN.map(a => (
+            <TouchableOpacity
+              key={a}
+              style={[styles.currencyPill, baseAsset === a && styles.currencyPillActive]}
+              onPress={() => setBaseAsset(a)}
+            >
+              <Text style={[styles.currencyPillText, baseAsset === a && styles.currencyPillTextActive]}>{assetMeta(a).display}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
       {/* Amount */}
       <View style={styles.section}>
-        <Text style={styles.label}>POH Amount</Text>
+        <Text style={styles.label}>{assetMeta(baseAsset).display} Amount</Text>
         <TextInput
           style={styles.input}
           placeholder="e.g. 100"
@@ -137,21 +166,24 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
       <View style={styles.section}>
         <Text style={styles.label}>Paid in</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {CURRENCIES.map(c => (
+          {[...ONCHAIN.filter(c => c !== baseAsset), ...CURRENCIES].map(c => (
             <TouchableOpacity
               key={c}
               style={[styles.currencyPill, quoteCurrency === c && styles.currencyPillActive]}
               onPress={() => setQuoteCurrency(c)}
             >
-              <Text style={[styles.currencyPillText, quoteCurrency === c && styles.currencyPillTextActive]}>{c}</Text>
+              <Text style={[styles.currencyPillText, quoteCurrency === c && styles.currencyPillTextActive]}>
+                {ONCHAIN.includes(c) ? `${assetMeta(c).display} ⚡` : c}
+              </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
+        {atomic && <Text style={[styles.hint, { marginTop: 6 }]}>⚡ On-chain payment — the swap settles instantly to both wallets, no payment methods needed.</Text>}
       </View>
 
       {/* Price */}
       <View style={styles.section}>
-        <Text style={styles.label}>Price per POH ({quoteCurrency})</Text>
+        <Text style={styles.label}>Price per {assetMeta(baseAsset).display} ({ONCHAIN.includes(quoteCurrency) ? assetMeta(quoteCurrency).display : quoteCurrency})</Text>
         <TextInput
           style={styles.input}
           placeholder="e.g. 0.50"
@@ -185,7 +217,8 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
         </View>
       </View>
 
-      {/* Payment methods */}
+      {/* Payment methods (off-chain quotes only — atomic swaps need none) */}
+      {!atomic && (
       <View style={styles.section}>
         <Text style={styles.label}>Payment Methods</Text>
         {methods.map((m, i) => {
@@ -233,6 +266,7 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
           <Text style={styles.addMethodText}>+ Add payment method</Text>
         </TouchableOpacity>
       </View>
+      )}
 
       {/* Referral code */}
       <View style={styles.section}>
