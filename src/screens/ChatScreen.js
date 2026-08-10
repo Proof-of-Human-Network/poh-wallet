@@ -11,7 +11,10 @@ import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 
-const MAX_ATTACH_BYTES = 100 * 1024;
+// Matches miner MAX_ATTACHMENT_BYTES (1 MB). Text inlined; images as data URLs.
+const MAX_ATTACH_BYTES = 1 * 1024 * 1024;
+const IMAGE_EXT_RE = /\.(png|jpe?g|webp|gif|bmp)$/i;
+const TEXT_EXT_RE = /\.(txt|md|markdown|json|csv|log|js|jsx|ts|tsx|py|html?|css|ya?ml|xml|sh|sql|rs|go|java|c|cpp|h|rb|php)$/i;
 
 // ── Log fee slider: 1 kPOH (=1000 μPOH, 1e-6 POH) → 1 POH, logarithmic ─────────
 const LOG_MIN = 0.000001, LOG_MAX = 1, LOG_STEPS = 200;   // floor = 1 kPOH = 1000 μPOH
@@ -163,7 +166,7 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
   const [statusText, setStatusText] = useState('');
   // Messenger-style conversation: [{ id, role: 'user'|'ai', text?, error?, ...skill fields }]
   const [messages,   setMessages]   = useState([]);
-  const [attachedFile, setAttachedFile] = useState(null); // { name, content }
+  const [attachedFile, setAttachedFile] = useState(null); // { name, kind, content?|dataUrl?, mime?, size? }
   const [suggestions, setSuggestions] = useState([]);
   const [historyBanner, setHistoryBanner] = useState(null);
   const [feeOpen, setFeeOpen] = useState(false);
@@ -234,27 +237,54 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
     }
   };
 
-  // ── File attachment ───────────────────────────────────────────────────────
+  // ── File attachment (text + images, 1 MB) ─────────────────────────────────
   const pickAttachment = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({ type: '*/*', copyToCacheDirectory: true });
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['text/*', 'image/*', 'application/json', '*/*'],
+        copyToCacheDirectory: true,
+      });
       if (result.canceled || !result.assets?.length) return;
       const file = result.assets[0];
       if (file.size && file.size > MAX_ATTACH_BYTES) {
-        Alert.alert('File too large', `Max 100KB. "${file.name}" is ${(file.size / 1024).toFixed(0)}KB.`);
+        Alert.alert('File too large', `Max 1 MB. "${file.name}" is ${(file.size / 1024).toFixed(0)} KB.`);
         return;
       }
-      const content = await FileSystem.readAsStringAsync(file.uri, { encoding: FileSystem.EncodingType.UTF8 });
-      setAttachedFile({ name: file.name, content: content.slice(0, 100_000) });
+      const mime = file.mimeType || '';
+      const isImage = mime.startsWith('image/') || IMAGE_EXT_RE.test(file.name || '');
+      const isText = mime.startsWith('text/') || /json|xml|javascript|yaml/.test(mime) || TEXT_EXT_RE.test(file.name || '');
+      if (!isImage && !isText) {
+        Alert.alert('Unsupported file', 'Attach text (txt/md/json/csv/code) or images (png/jpg/webp/gif).');
+        return;
+      }
+      if (isImage) {
+        const b64 = await FileSystem.readAsStringAsync(file.uri, { encoding: FileSystem.EncodingType.Base64 });
+        const dataUrl = `data:${mime || 'image/png'};base64,${b64}`;
+        setAttachedFile({ name: file.name, kind: 'image', mime: mime || 'image/png', dataUrl, size: file.size });
+      } else {
+        const content = await FileSystem.readAsStringAsync(file.uri, { encoding: FileSystem.EncodingType.UTF8 });
+        setAttachedFile({
+          name: file.name, kind: 'text', mime: mime || 'text/plain',
+          content: content.slice(0, 200_000), size: file.size,
+        });
+      }
     } catch (e) {
-      Alert.alert('Error', 'Could not read that file. It may not be a text file.');
+      Alert.alert('Error', e.message || 'Could not read that file.');
     }
   };
 
   const removeAttachment = () => setAttachedFile(null);
 
+  function attachmentPayload(file) {
+    if (!file) return null;
+    if (file.kind === 'image' || file.dataUrl) {
+      return [{ name: file.name, mime: file.mime, dataUrl: file.dataUrl }];
+    }
+    return [{ name: file.name, mime: file.mime || 'text/plain', content: file.content }];
+  }
+
   // ── Node fetch ────────────────────────────────────────────────────────────
-  async function askNode(q) {
+  async function askNode(q, { attachments, datasetId } = {}) {
     const candidates = [
       activeNodeUrl,
       ...nodes.map(n => n.url).filter(u => u !== activeNodeUrl),
@@ -265,32 +295,50 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
       try {
         const base = url.replace(/\/$/, '');
         const ctrl  = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 75_000);
+        const timer = setTimeout(() => ctrl.abort(), 120_000);
         let res;
         try {
+          const body = {
+            message: q || 'Please analyze the attached file(s).',
+            walletAddress: selectedAddress,
+            address: selectedAddress,
+            requesterAddress: selectedAddress,
+          };
+          if (attachments?.length) body.attachments = attachments;
+          if (datasetId) body.datasetId = datasetId;
           res = await fetch(`${base}/chat/ask`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              message: q,
-              walletAddress: selectedAddress,
-              address: selectedAddress,
-              requesterAddress: selectedAddress,
-            }),
+            body: JSON.stringify(body),
             signal: ctrl.signal,
           });
         } finally { clearTimeout(timer); }
-        if (!res.ok) { lastErr = (await res.json().catch(() => ({}))).error || `HTTP ${res.status}`; continue; }
-        const data = await res.json();
+
+        const data = await res.json().catch(() => ({}));
+        // 412 = dataset download required — surface to caller, not as a hard fail
+        if (res.status === 412 && data.code === 'HF_DATASET_DOWNLOAD_REQUIRED') {
+          return { data, base, datasetRequired: true };
+        }
+        if (!res.ok) {
+          lastErr = data.error || `HTTP ${res.status}`;
+          continue;
+        }
         return { data, base };
       } catch (e) { lastErr = e.message; }
     }
     throw new Error(lastErr || 'All nodes unreachable for chat');
   }
 
+  async function downloadDatasetOnNode(base, datasetId) {
+    const r = await fetch(`${base}/api/hf-dataset/${encodeURIComponent(datasetId)}/download`, { method: 'POST' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d.error || `Dataset download failed (HTTP ${r.status})`);
+    return d;
+  }
+
   // ── Submit ────────────────────────────────────────────────────────────────
-  const submitText = async (q) => {
-    if (!q) return;
+  const submitText = async (q, { attachments: atts } = {}) => {
+    if (!q && !(atts?.length)) return;
     if (!activeNodeUrl) {
       pushMsg({ role: 'ai', error: true, text: 'No node connected. Check Settings.' });
       return;
@@ -299,14 +347,48 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
     setLoading(true);
 
     try {
-      setStatusText('Thinking...');
-      const { data: askData, base } = await askNode(q);
+      setStatusText(atts?.length ? 'Reading attachment…' : 'Thinking...');
+      let { data: askData, base, datasetRequired } = await askNode(q, { attachments: atts });
 
-      if (askData.type === 'chat') {
+      // Dataset approval loop (matches desktop HF_DATASET_DOWNLOAD_REQUIRED flow)
+      if (datasetRequired && askData.datasetId) {
+        const install = await new Promise((resolve) => {
+          Alert.alert(
+            'Dataset required',
+            `Install "${askData.datasetId}" on this miner to answer?\n\n${askData.installInstructions || 'Stored under ~/.poh-miner/brain-data/hf-datasets/'}`,
+            [
+              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Download', onPress: () => resolve(true) },
+            ],
+          );
+        });
+        if (!install) {
+          pushMsg({ role: 'ai', type: 'chat', text: `Download declined for \`${askData.datasetId}\`.` });
+          setStatusText('');
+          return;
+        }
+        setStatusText(`Downloading ${askData.datasetId}…`);
+        await downloadDatasetOnNode(base, askData.datasetId);
+        setStatusText('Answering with dataset…');
+        ({ data: askData, base } = await askNode(q, { attachments: atts, datasetId: askData.datasetId }));
+      }
+
+      // Free chat / cascade / inline skill / hf-model all return type:'chat' with a message
+      if (askData.type === 'chat' || askData.message || askData.reply) {
+        const label = askData.cascade || askData.tasks
+          ? 'AI · task cascade'
+          : askData.skill
+            ? `AI · ${askData.skill}`
+            : askData.fromChainHistory
+              ? 'AI · from chain history'
+              : 'AI';
         pushMsg({
           role: 'ai', type: 'chat',
           text: askData.message || askData.reply || '(no response)',
           fromChainHistory: !!askData.fromChainHistory,
+          cascade: !!(askData.cascade || askData.tasks),
+          skill: askData.skill,
+          headerLabel: label,
         });
         setSuggestions([]);
         setHistoryBanner(null);
@@ -410,14 +492,24 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
   const submit = () => {
     const text = message.trim();
     if (!text && !attachedFile) return;
-    const q = attachedFile
-      ? `${text}\n\n[Attached file: ${attachedFile.name}]\n\`\`\`\n${attachedFile.content}\n\`\`\``
-      : text;
-    pushMsg({ role: 'user', text: text || `📎 ${attachedFile?.name}`, attachment: attachedFile?.name || null });
+    const atts = attachmentPayload(attachedFile);
+    // Text-only attachments still get a readable prompt; images rely on structured attachments
+    let q = text;
+    if (attachedFile?.kind === 'text' && attachedFile.content) {
+      q = `${text}\n\n[Attached file: ${attachedFile.name}]\n\`\`\`\n${attachedFile.content}\n\`\`\``;
+    } else if (!q && attachedFile) {
+      q = 'Please analyze the attached file(s).';
+    }
+    const icon = attachedFile?.kind === 'image' ? '🖼️' : '📎';
+    pushMsg({
+      role: 'user',
+      text: text || `${icon} ${attachedFile?.name}`,
+      attachment: attachedFile?.name || null,
+    });
     setMessage('');
     setSuggestions([]);
     setHistoryBanner(null);
-    submitText(q);
+    submitText(q, { attachments: atts });
     setAttachedFile(null);
   };
 
@@ -484,7 +576,10 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
             <Text style={s.bubbleHeader}>
               {isSkill
                 ? `${msg.skillId}${msg.tokensUsed ? `  ·  ${msg.tokensUsed} tokens` : ''}`
-                : msg.fromChainHistory ? 'AI · from chain history' : 'AI'}
+                : msg.headerLabel
+                  || (msg.cascade ? 'AI · task cascade' : null)
+                  || (msg.skill ? `AI · ${msg.skill}` : null)
+                  || (msg.fromChainHistory ? 'AI · from chain history' : 'AI')}
             </Text>
             <TouchableOpacity style={s.copyBtn} onPress={() => copyMessage(msg)}>
               <Text style={s.copyBtnText}>⎘</Text>
@@ -591,7 +686,11 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
         {attachedFile ? (
           <View style={s.attachChipRow}>
             <View style={s.attachChip}>
-              <Text style={s.attachChipText} numberOfLines={1}>{attachedFile.name}</Text>
+              <Text style={s.attachChipText} numberOfLines={1}>
+                {attachedFile.kind === 'image' ? '🖼️ ' : '📎 '}
+                {attachedFile.name}
+                {attachedFile.size ? ` (${Math.max(1, Math.round(attachedFile.size / 1024))} KB)` : ''}
+              </Text>
               <TouchableOpacity onPress={removeAttachment}>
                 <Text style={s.attachChipRemove}>×</Text>
               </TouchableOpacity>
