@@ -6,17 +6,17 @@ import {
 import { fetchMyOrders, fetchMyTrades, cancelOrder } from '../services/p2pClient';
 import { assetMeta } from '../constants/assets';
 
-const POH_DECIMALS = 1_000_000_000;
+const DAI_DECIMALS = 1_000_000_000;
 
-function formatPOH(uPOH) {
-  return (uPOH / 1e9).toLocaleString(undefined, { maximumFractionDigits: 4 });
+function formatDAI(uDAI) {
+  return (uDAI / 1e9).toLocaleString(undefined, { maximumFractionDigits: 4 });
 }
 
-// Base-asset aware: orders may sell a stablecoin (order.baseAsset) instead of POH.
+// Base-asset aware: orders may sell a stablecoin (order.baseAsset) instead of DAI.
 function formatBase(order) {
-  const t = (order && order.baseAsset) || 'POH';
+  const t = (order && order.baseAsset) || 'DAI';
   const a = assetMeta(t);
-  return `${(order.pohAmount / 10 ** a.decimals).toLocaleString(undefined, { maximumFractionDigits: a.decimals === 2 ? 2 : 4 })} ${a.display}`;
+  return `${(order.daiAmount / 10 ** a.decimals).toLocaleString(undefined, { maximumFractionDigits: a.decimals === 2 ? 2 : 4 })} ${a.display}`;
 }
 
 function timeAgo(ts) {
@@ -90,7 +90,7 @@ export default function MyOrdersScreen({ selectedAddress, activeNodeUrl, getPriv
         </View>
         <Text style={styles.cardTitle}>{formatBase(order)}</Text>
         <Text style={styles.cardMeta}>
-          {order.pricePerPOH} {order.quoteCurrency}/POH · Limit {order.minTrade}–{order.maxTrade?.toFixed(2)} {order.quoteCurrency}
+          {order.pricePerDAI} {order.quoteCurrency}/DAI · Limit {order.minTrade}–{order.maxTrade?.toFixed(2)} {order.quoteCurrency}
         </Text>
         <Text style={styles.cardMeta}>{timeAgo(order.createdAt)}</Text>
 
@@ -133,7 +133,7 @@ export default function MyOrdersScreen({ selectedAddress, activeNodeUrl, getPriv
           <Text style={[styles.badge, { backgroundColor: color + '22', color }]}>{trade.status.replace('_', ' ').toUpperCase()}</Text>
           <Text style={styles.cardMeta}>{isMaker ? 'Maker' : 'Taker'}</Text>
         </View>
-        <Text style={styles.cardTitle}>{formatPOH(trade.pohAmount)} POH</Text>
+        <Text style={styles.cardTitle}>{formatDAI(trade.daiAmount)} DAI</Text>
         <Text style={styles.cardMeta}>
           {trade.quoteAmount?.toFixed(4)} {order?.quoteCurrency} · {order?.side?.toUpperCase()} order
         </Text>

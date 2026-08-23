@@ -11,15 +11,15 @@ const CURRENCIES = [
   'BTC', 'ETH', 'SOL', 'USDC-ERC20',
 ];
 
-function formatPOH(uPOH) {
-  return (uPOH / 1e9).toLocaleString(undefined, { maximumFractionDigits: 4 });
+function formatDAI(uDAI) {
+  return (uDAI / 1e9).toLocaleString(undefined, { maximumFractionDigits: 4 });
 }
 
-// Base-asset aware: orders may sell a stablecoin (order.baseAsset) instead of POH.
+// Base-asset aware: orders may sell a stablecoin (order.baseAsset) instead of DAI.
 function formatBase(order) {
-  const t = (order && order.baseAsset) || 'POH';
+  const t = (order && order.baseAsset) || 'DAI';
   const a = assetMeta(t);
-  return `${(order.pohAmount / 10 ** a.decimals).toLocaleString(undefined, { maximumFractionDigits: a.decimals === 2 ? 2 : 4 })} ${a.display}`;
+  return `${(order.daiAmount / 10 ** a.decimals).toLocaleString(undefined, { maximumFractionDigits: a.decimals === 2 ? 2 : 4 })} ${a.display}`;
 }
 
 function timeAgo(ts) {
@@ -54,7 +54,7 @@ export default function P2PScreen({ selectedAddress, activeNodeUrl, onNavigate }
   const onRefresh = () => { setRefreshing(true); load(true); };
 
   const renderOrder = ({ item: order }) => {
-    const pohDisplay = formatBase(order);
+    const daiDisplay = formatBase(order);
     return (
       <TouchableOpacity
         style={styles.orderCard}
@@ -62,12 +62,12 @@ export default function P2PScreen({ selectedAddress, activeNodeUrl, onNavigate }
       >
         <View style={styles.orderRow}>
           <Text style={styles.priceText}>
-            {order.pricePerPOH} <Text style={styles.currencyBadge}>{order.quoteCurrency}</Text>
+            {order.pricePerDAI} <Text style={styles.currencyBadge}>{order.quoteCurrency}</Text>
           </Text>
           <Text style={[styles.sideBadge, styles.sellBadge]}>SELL</Text>
         </View>
         <View style={styles.orderRow}>
-          <Text style={styles.orderMeta}>Amount: {pohDisplay}</Text>
+          <Text style={styles.orderMeta}>Amount: {daiDisplay}</Text>
           <Text style={styles.orderMeta}>Limit: {order.minTrade}–{order.maxTrade?.toFixed(2)} {order.quoteCurrency}</Text>
         </View>
         <View style={styles.orderRow}>

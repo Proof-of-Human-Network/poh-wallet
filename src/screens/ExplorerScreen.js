@@ -4,9 +4,9 @@ import {
   FlatList, ActivityIndicator, ScrollView,
 } from 'react-native';
 
-const POH = 1_000_000_000;
+const DAI = 1_000_000_000;
 
-function fmtPOH(v) { return ((v || 0) / POH).toLocaleString(undefined, { maximumFractionDigits: 4 }); }
+function fmtDAI(v) { return ((v || 0) / DAI).toLocaleString(undefined, { maximumFractionDigits: 4 }); }
 function fmtTime(ts) { return ts ? new Date(ts).toLocaleString() : '—'; }
 function fmtAddr(a) { return a ? a.slice(0, 10) + '…' + a.slice(-6) : '—'; }
 
@@ -82,7 +82,7 @@ export default function ExplorerScreen({ activeNodeUrl, onNavigate }) {
             <Row label="HASH" value={b.hash} small />
             <Row label="MINER" value={b.minerWallet} onPress={() => searchAddr(b.minerWallet)} />
             <Row label="TIME" value={fmtTime(b.timestamp)} />
-            <Row label="REWARD" value={b.coinbaseReward > 0 ? fmtPOH(b.coinbaseReward) + ' POH' : '—'} green />
+            <Row label="REWARD" value={b.coinbaseReward > 0 ? fmtDAI(b.coinbaseReward) + ' DAI' : '—'} green />
             <Row label="TXS" value={String(txs.length)} />
           </View>
           {txs.length > 0 && (
@@ -95,7 +95,7 @@ export default function ExplorerScreen({ activeNodeUrl, onNavigate }) {
                     <TouchableOpacity onPress={() => searchAddr(tx.from)}>
                       <Text style={styles.txAddr}>{fmtAddr(tx.from)}</Text>
                     </TouchableOpacity>
-                    <Text style={styles.txAmount}>{fmtPOH(tx.amount)} POH</Text>
+                    <Text style={styles.txAmount}>{fmtDAI(tx.amount)} DAI</Text>
                     <TouchableOpacity onPress={() => searchAddr(tx.to)}>
                       <Text style={styles.txAddr}>{fmtAddr(tx.to)}</Text>
                     </TouchableOpacity>
@@ -117,7 +117,7 @@ export default function ExplorerScreen({ activeNodeUrl, onNavigate }) {
           <Row label="BLOCK" value={`#${block.height}`} onPress={() => viewBlock(block.height)} green />
           <Row label="FROM" value={tx.from} onPress={() => searchAddr(tx.from)} />
           <Row label="TO" value={tx.to} onPress={() => searchAddr(tx.to)} />
-          <Row label="AMOUNT" value={fmtPOH(tx.amount) + ' POH'} green />
+          <Row label="AMOUNT" value={fmtDAI(tx.amount) + ' DAI'} green />
           <Row label="TIME" value={fmtTime(block.timestamp)} />
         </View>
       );
@@ -129,7 +129,7 @@ export default function ExplorerScreen({ activeNodeUrl, onNavigate }) {
           <View style={styles.card}>
             <Text style={styles.cardLabel}>ADDRESS</Text>
             <Text style={styles.txHash}>{result.address}</Text>
-            <Row label="BALANCE" value={fmtPOH(result.balance) + ' POH'} green />
+            <Row label="BALANCE" value={fmtDAI(result.balance) + ' DAI'} green />
           </View>
           {result.entries?.length > 0 && (
             <>
@@ -138,7 +138,7 @@ export default function ExplorerScreen({ activeNodeUrl, onNavigate }) {
                 <View key={i} style={styles.histRow}>
                   <Text style={styles.histLabel}>{e.label} · Block #{e.height || '?'}</Text>
                   <Text style={[styles.histAmt, { color: e.delta > 0 ? '#22c55e' : '#ef4444' }]}>
-                    {e.delta > 0 ? '+' : ''}{fmtPOH(e.delta)} POH
+                    {e.delta > 0 ? '+' : ''}{fmtDAI(e.delta)} DAI
                   </Text>
                 </View>
               ))}
@@ -210,7 +210,7 @@ export default function ExplorerScreen({ activeNodeUrl, onNavigate }) {
                   <Text style={styles.blockMeta}>{fmtAddr(b.miner)} · {b.txCount} tx</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
-                  {b.reward > 0 && <Text style={styles.reward}>+{fmtPOH(b.reward)} POH</Text>}
+                  {b.reward > 0 && <Text style={styles.reward}>+{fmtDAI(b.reward)} DAI</Text>}
                   <Text style={styles.blockTime}>{b.timestamp ? new Date(b.timestamp).toLocaleTimeString() : ''}</Text>
                 </View>
               </TouchableOpacity>

@@ -10,17 +10,17 @@ import {
   markPaymentSent, releaseTrade, cancelTrade, disputeTrade,
 } from '../services/p2pClient';
 
-const POH_DECIMALS = 1_000_000_000;
+const DAI_DECIMALS = 1_000_000_000;
 
-function formatPOH(uPOH) {
-  return (uPOH / 1e9).toLocaleString(undefined, { maximumFractionDigits: 4 });
+function formatDAI(uDAI) {
+  return (uDAI / 1e9).toLocaleString(undefined, { maximumFractionDigits: 4 });
 }
 
-// Base-asset aware: orders may sell a stablecoin (order.baseAsset) instead of POH.
+// Base-asset aware: orders may sell a stablecoin (order.baseAsset) instead of DAI.
 function formatBase(order) {
-  const t = (order && order.baseAsset) || 'POH';
+  const t = (order && order.baseAsset) || 'DAI';
   const a = assetMeta(t);
-  return `${(order.pohAmount / 10 ** a.decimals).toLocaleString(undefined, { maximumFractionDigits: a.decimals === 2 ? 2 : 4 })} ${a.display}`;
+  return `${(order.daiAmount / 10 ** a.decimals).toLocaleString(undefined, { maximumFractionDigits: a.decimals === 2 ? 2 : 4 })} ${a.display}`;
 }
 
 function formatCountdown(ms) {
@@ -57,7 +57,7 @@ export default function TradeScreen({
   const [tradeId, setTradeId] = useState(initialTradeId || null);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
-  const [pohInput, setPohInput] = useState('');   // for select form
+  const [daiInput, setDAIInput] = useState('');   // for select form
   const [countdown, setCountdown] = useState(null);
   const [disputeReason, setDisputeReason] = useState('');
   const [showDisputeInput, setShowDisputeInput] = useState(false);
@@ -107,14 +107,14 @@ export default function TradeScreen({
   };
 
   const doSelect = async () => {
-    const poh = parseFloat(pohInput);
-    if (!poh || poh <= 0) return Alert.alert('Invalid', 'Enter a valid amount.');
+    const dai = parseFloat(daiInput);
+    if (!dai || dai <= 0) return Alert.alert('Invalid', 'Enter a valid amount.');
     if (!order) return;
-    const baseDec = 10 ** assetMeta((order && order.baseAsset) || 'POH').decimals;
-    const pohMicro = Math.round(poh * baseDec);
-    const ONCHAIN_Q = ['POH', 'aiGEL', 'aiKGS', 'aiAMD', 'aiETB', 'aiBTN'];
+    const baseDec = 10 ** assetMeta((order && order.baseAsset) || 'DAI').decimals;
+    const daiMicro = Math.round(dai * baseDec);
+    const ONCHAIN_Q = ['DAI', 'aiGEL', 'KGST', 'aiETB', 'aiBTN'];
     const quoteIsOnchain = ONCHAIN_Q.includes(order.quoteCurrency);
-    const quoteDisplay = poh * order.pricePerPOH;
+    const quoteDisplay = dai * order.pricePerDAI;
     // On-chain quote legs are debited in raw units of the quote asset
     const quoteAmount = quoteIsOnchain
       ? Math.round(quoteDisplay * 10 ** assetMeta(order.quoteCurrency).decimals)
@@ -127,12 +127,12 @@ export default function TradeScreen({
       try {
         const result = await selectOrder(activeNodeUrl, {
           address: selectedAddress, privateKeyHex: pk,
-          orderId: order.id, pohAmount: pohMicro, quoteAmount,
+          orderId: order.id, daiAmount: daiMicro, quoteAmount,
         });
         if (result.error) return Alert.alert('Error', result.error);
         if (result.atomic) {
           // Both legs settled on-chain in one step — nothing left to confirm.
-          Alert.alert('⚡ Swap completed', `You received ${poh} ${assetMeta(order.baseAsset || 'POH').display} directly to your wallet. The ${assetMeta(order.quoteCurrency).display} payment settled atomically.`);
+          Alert.alert('⚡ Swap completed', `You received ${dai} ${assetMeta(order.baseAsset || 'DAI').display} directly to your wallet. The ${assetMeta(order.quoteCurrency).display} payment settled atomically.`);
         }
         setTrade(result.trade);
         setTradeId(result.trade?.id);
@@ -153,7 +153,7 @@ export default function TradeScreen({
         if (result.error) return Alert.alert('Error', result.error);
         setTrade(result.trade);
         if (action === 'release') {
-          Alert.alert('Complete!', 'POH released. Trade is done.', [{ text: 'OK', onPress: () => onNavigate('p2p') }]);
+          Alert.alert('Complete!', 'DAI released. Trade is done.', [{ text: 'OK', onPress: () => onNavigate('p2p') }]);
         }
       } catch (e) { Alert.alert('Error', e.message); }
     });
@@ -186,7 +186,7 @@ export default function TradeScreen({
 
         <View style={styles.card}>
           <View style={styles.row}>
-            <Text style={styles.bigPrice}>{order.pricePerPOH} <Text style={styles.green}>{order.quoteCurrency}</Text></Text>
+            <Text style={styles.bigPrice}>{order.pricePerDAI} <Text style={styles.green}>{order.quoteCurrency}</Text></Text>
             <Text style={[styles.badge, styles.sellBadge]}>SELL</Text>
           </View>
           <Text style={styles.meta}>Available: {formatBase(order)}</Text>
@@ -210,15 +210,15 @@ export default function TradeScreen({
             <Text style={styles.sectionTitle}>Place Trade</Text>
             <TextInput
               style={styles.input}
-              placeholder="POH amount to trade"
+              placeholder="DAI amount to trade"
               placeholderTextColor="#555"
               keyboardType="numeric"
-              value={pohInput}
-              onChangeText={setPohInput}
+              value={daiInput}
+              onChangeText={setDAIInput}
             />
-            {pohInput && parseFloat(pohInput) > 0 && (
+            {daiInput && parseFloat(daiInput) > 0 && (
               <Text style={styles.quoteCalc}>
-                You pay: {(parseFloat(pohInput) * order.pricePerPOH).toFixed(4)} {order.quoteCurrency}
+                You pay: {(parseFloat(daiInput) * order.pricePerDAI).toFixed(4)} {order.quoteCurrency}
               </Text>
             )}
             <TouchableOpacity style={styles.actionBtn} onPress={doSelect} disabled={acting}>
@@ -267,8 +267,8 @@ export default function TradeScreen({
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Trade Summary</Text>
         <View style={styles.row}>
-          <Text style={styles.meta}>POH Amount</Text>
-          <Text style={styles.value}>{formatPOH(trade.pohAmount)} POH</Text>
+          <Text style={styles.meta}>DAI Amount</Text>
+          <Text style={styles.value}>{formatDAI(trade.daiAmount)} DAI</Text>
         </View>
         <View style={styles.row}>
           <Text style={styles.meta}>Quote Amount</Text>
@@ -276,7 +276,7 @@ export default function TradeScreen({
         </View>
         <View style={styles.row}>
           <Text style={styles.meta}>Price</Text>
-          <Text style={styles.value}>{order?.pricePerPOH} {order?.quoteCurrency}/POH</Text>
+          <Text style={styles.value}>{order?.pricePerDAI} {order?.quoteCurrency}/DAI</Text>
         </View>
         <View style={styles.row}>
           <Text style={styles.meta}>Your role</Text>
@@ -308,7 +308,7 @@ export default function TradeScreen({
         <View style={styles.infoBox}>
           <Text style={styles.infoText}>
             Waiting for buyer to send <Text style={styles.green}>{trade.quoteAmount?.toFixed(4)} {order?.quoteCurrency}</Text>.
-            {'\n'}Your {formatPOH(trade.pohAmount)} POH is locked in escrow.
+            {'\n'}Your {formatDAI(trade.daiAmount)} DAI is locked in escrow.
           </Text>
         </View>
       )}
@@ -323,9 +323,9 @@ export default function TradeScreen({
 
         {trade.status === 'payment_sent' && amISeller && (
           <>
-            <Text style={styles.instrText}>Buyer has marked payment as sent. Verify your account, then release POH.</Text>
+            <Text style={styles.instrText}>Buyer has marked payment as sent. Verify your account, then release DAI.</Text>
             <TouchableOpacity style={styles.actionBtn} onPress={() => doAction('release')} disabled={acting}>
-              {acting ? <ActivityIndicator color="#000" /> : <Text style={styles.actionBtnText}>Release POH to Buyer</Text>}
+              {acting ? <ActivityIndicator color="#000" /> : <Text style={styles.actionBtnText}>Release DAI to Buyer</Text>}
             </TouchableOpacity>
           </>
         )}

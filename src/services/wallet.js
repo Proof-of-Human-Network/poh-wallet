@@ -2,7 +2,7 @@ import * as Crypto from 'expo-crypto';
 import { deriveSigningKeypair } from './signing';
 
 /**
- * Derives a POH address + signing material from the private key entropy (legacy field).
+ * Derives a DAI address + signing material from the private key entropy (legacy field).
  * Canonical address is now derived from the ed25519 signing public key (raw base64)
  * to satisfy node's isAddressBoundToSigningKey + register-key.
  * Must produce addresses that allow /api/wallet/register-key and /api/tx/submit to succeed.
@@ -15,14 +15,14 @@ export async function deriveFromPrivateKey(privateKeyHex) {
   // Derive the ed25519 signing keypair (raw b64 public key as used in txs/register)
   const { signingPublicKey } = await deriveSigningKeypair(privateKeyHex);
 
-  // Canonical address = 'poh' + sha256( signingPublicKey string ).slice(0,40)
+  // Canonical address = 'dai' + sha256( signingPublicKey string ).slice(0,40)
   // Matches Wallet.deriveAddressFromSigningKey when passed raw base64 key.
   const addrHash = await Crypto.digestStringAsync(
     Crypto.CryptoDigestAlgorithm.SHA256,
     signingPublicKey,
     { encoding: Crypto.CryptoEncoding.HEX }
   );
-  const address = 'poh' + addrHash.slice(0, 40);
+  const address = 'dai' + addrHash.slice(0, 40);
 
   // Legacy pub (sha of main priv) kept for storage compat but unused for crypto
   const legacyPubHash = await Crypto.digestStringAsync(

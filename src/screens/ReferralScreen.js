@@ -5,8 +5,8 @@ import {
 } from 'react-native';
 import { fetchReferralStats, applyReferralCode } from '../services/p2pClient';
 
-function formatPOH(uPOH) {
-  return (uPOH / 1e9).toLocaleString(undefined, { maximumFractionDigits: 4 });
+function formatDAI(uDAI) {
+  return (uDAI / 1e9).toLocaleString(undefined, { maximumFractionDigits: 4 });
 }
 
 export default function ReferralScreen({ selectedAddress, activeNodeUrl, getPrivateKey, onNavigate }) {
@@ -90,8 +90,8 @@ export default function ReferralScreen({ selectedAddress, activeNodeUrl, getPriv
               <Text style={styles.statLabel}>Trades</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={styles.statValue}>{formatPOH(stats?.earnedFees ?? 0)}</Text>
-              <Text style={styles.statLabel}>POH Earned</Text>
+              <Text style={styles.statValue}>{formatDAI(stats?.earnedFees ?? 0)}</Text>
+              <Text style={styles.statLabel}>DAI Earned</Text>
             </View>
           </View>
 

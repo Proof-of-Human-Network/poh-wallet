@@ -1,4 +1,4 @@
-package com.poh.wallet
+package com.dai.wallet
 
 import android.app.Application
 import android.content.res.Configuration

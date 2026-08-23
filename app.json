@@ -1,15 +1,15 @@
 {
   "expo": {
-    "name": "PoH Wallet",
+    "name": "DAI Wallet",
     "slug": "poh-wallet",
     "version": "0.4.0",
     "orientation": "portrait",
-    "icon": "./assets/favicon.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#000000"
+      "backgroundColor": "#FEEDE2"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -20,8 +20,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/favicon.png",
-        "backgroundColor": "#000000"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FEEDE2"
       },
       "package": "com.poh.wallet",
       "versionCode": 3
@@ -29,7 +29,7 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "description": "PoH Miner Wallet - Real crypto wallet for the Proof of Humanity network",
+    "description": "DAI Miner Wallet - Real crypto wallet for the Decentralized Artificial Intelligence network",
     "githubUrl": "https://github.com/your-org/poh-miner",
     "extra": {
       "eas": {

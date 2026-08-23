@@ -62,13 +62,13 @@ export async function fetchCurrencies(nodeUrl) {
 
 // ─── Create / cancel order ───────────────────────────────────────────────────
 
-export async function createOrder(nodeUrl, { address, privateKeyHex, side, pohAmount, baseAsset, baseDecimals, quoteCurrency, pricePerPOH, minTrade, maxTrade, paymentMethods }) {
+export async function createOrder(nodeUrl, { address, privateKeyHex, side, daiAmount, baseAsset, baseDecimals, quoteCurrency, pricePerDAI, minTrade, maxTrade, paymentMethods }) {
   const { signingPublicKey, secretKey } = await getSigningKeys(privateKeyHex);
   await registerSigningKey(nodeUrl, address, signingPublicKey, secretKey);
   const auth = await buildAuth(address, signingPublicKey, secretKey, {
-    action: 'create-order', side, pohAmount,
+    action: 'create-order', side, daiAmount,
   });
-  const body = { ...auth, side, pohAmount, ...(baseAsset && baseAsset !== 'POH' ? { baseAsset, baseDecimals } : {}), quoteCurrency, pricePerPOH, minTrade, maxTrade, paymentMethods };
+  const body = { ...auth, side, daiAmount, ...(baseAsset && baseAsset !== 'DAI' ? { baseAsset, baseDecimals } : {}), quoteCurrency, pricePerDAI, minTrade, maxTrade, paymentMethods };
   const res = await fetch(`${nodeUrl}/api/p2p/orders`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -91,13 +91,13 @@ export async function cancelOrder(nodeUrl, { address, privateKeyHex, orderId }) 
 
 // ─── Trade actions ────────────────────────────────────────────────────────────
 
-export async function selectOrder(nodeUrl, { address, privateKeyHex, orderId, pohAmount, quoteAmount }) {
+export async function selectOrder(nodeUrl, { address, privateKeyHex, orderId, daiAmount, quoteAmount }) {
   const { signingPublicKey, secretKey } = await getSigningKeys(privateKeyHex);
   await registerSigningKey(nodeUrl, address, signingPublicKey, secretKey);
   const auth = await buildAuth(address, signingPublicKey, secretKey, {
-    action: 'select-order', orderId, pohAmount, quoteAmount,
+    action: 'select-order', orderId, daiAmount, quoteAmount,
   });
-  const body = { ...auth, pohAmount, quoteAmount };
+  const body = { ...auth, daiAmount, quoteAmount };
   const res = await fetch(`${nodeUrl}/api/p2p/orders/${orderId}/select`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

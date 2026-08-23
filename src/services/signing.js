@@ -1,8 +1,8 @@
 import nacl from 'tweetnacl';
 import * as Crypto from 'expo-crypto';
 
-// POH_DECIMALS must match the node (reward.js: 1 POH = 1e9 μPOH)
-export const POH_DECIMALS = 1_000_000_000;
+// DAI_DECIMALS must match the node (reward.js: 1 DAI = 1e9 μDAI)
+export const DAI_DECIMALS = 1_000_000_000;
 
 function hexToUint8(hex) {
   const arr = new Uint8Array(hex.length / 2);
@@ -26,7 +26,7 @@ function uint8ToBase64(arr) {
 export async function deriveSigningKeypair(privateKeyHex) {
   const seedHex = await Crypto.digestStringAsync(
     Crypto.CryptoDigestAlgorithm.SHA256,
-    privateKeyHex + ':poh-ed25519-signing-v1',
+    privateKeyHex + ':dai-ed25519-signing-v1',
     { encoding: Crypto.CryptoEncoding.HEX }
   );
   const seed = hexToUint8(seedHex);
@@ -56,12 +56,12 @@ export function signData(data, secretKey) {
  *   sha256(JSON.stringify({ jobId, requesterAddress, minerAddress, amount, nonce }))
  * — field order matters. `nonce` is the CONFIRMED nonce from /api/wallet/nonce
  * (not +1 — the node checks against walletManager.getNonce()).
- * `amount` is in μPOH and must equal the job's maxBudget.
+ * `amount` is in μDAI and must equal the job's maxBudget.
  */
 export async function buildJobPaymentTx({ jobId, requesterAddress, minerAddress, amount, nonce, currency, secretKey }) {
   // LOCKSTEP with node computeJobPaymentHash: `currency` joins the preimage as
-  // the SIXTH key ONLY when non-POH — POH payments keep the historical hash.
-  const payload = (currency && currency !== 'POH')
+  // the SIXTH key ONLY when non-DAI — DAI payments keep the historical hash.
+  const payload = (currency && currency !== 'DAI')
     ? JSON.stringify({ jobId, requesterAddress, minerAddress, amount, nonce, currency })
     : JSON.stringify({ jobId, requesterAddress, minerAddress, amount, nonce });
   const txHash = await Crypto.digestStringAsync(
@@ -74,21 +74,21 @@ export async function buildJobPaymentTx({ jobId, requesterAddress, minerAddress,
 }
 
 /**
- * Build a signed PoHTransaction ready for POST /api/tx/submit.
+ * Build a signed DAITransaction ready for POST /api/tx/submit.
  *
- * amount is in display POH units (e.g. 1.5); converted internally to μPOH.
+ * amount is in display DAI units (e.g. 1.5); converted internally to μDAI.
  * nonce must be currentConfirmedNonce + 1.
  */
-export async function buildSignedTransaction({ from, to, amount, fee = 0, nonce, memo = '', currency = 'POH', secretKey, signingPublicKey }) {
-  // Per-asset decimals: POH ×1e9 (μPOH), stablecoins ×100 (2dp raw units).
-  const decimals = (!currency || currency === 'POH') ? 9 : 2;
+export async function buildSignedTransaction({ from, to, amount, fee = 0, nonce, memo = '', currency = 'DAI', secretKey, signingPublicKey }) {
+  // Per-asset decimals: DAI ×1e9 (μDAI), stablecoins ×100 (2dp raw units).
+  const decimals = (!currency || currency === 'DAI') ? 9 : 2;
   const amountMicro = Math.round(parseFloat(amount) * 10 ** decimals);
   const timestamp = Date.now();
 
-  // txHash must match PoHTransaction._computeHash() on the node. LOCKSTEP rule:
-  // `currency` joins the preimage after memo ONLY when non-POH — a POH tx hashes
+  // txHash must match DAITransaction._computeHash() on the node. LOCKSTEP rule:
+  // `currency` joins the preimage after memo ONLY when non-DAI — a DAI tx hashes
   // byte-identically to the historical shape (and carries no currency key).
-  const isStable = currency && currency !== 'POH';
+  const isStable = currency && currency !== 'DAI';
   const payload = isStable
     ? JSON.stringify({ from, to, amount: amountMicro, fee, nonce, timestamp, memo, currency })
     : JSON.stringify({ from, to, amount: amountMicro, fee, nonce, timestamp, memo });
@@ -100,7 +100,7 @@ export async function buildSignedTransaction({ from, to, amount, fee = 0, nonce,
 
   const signature = signData(txHash, secretKey);
 
-  // signingPublicKey is required by PoHTransaction.verify() on the node
+  // signingPublicKey is required by DAITransaction.verify() on the node
   return {
     from, to, amount: amountMicro, fee, nonce, timestamp, memo,
     ...(isStable ? { currency } : {}),

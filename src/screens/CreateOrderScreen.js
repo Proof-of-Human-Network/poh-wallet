@@ -6,7 +6,7 @@ import {
 import { createOrder, applyReferralCode } from '../services/p2pClient';
 import { STABLE_TICKERS, assetMeta } from '../constants/assets';
 
-const POH_DECIMALS = 1_000_000_000;
+const DAI_DECIMALS = 1_000_000_000;
 
 const CURRENCIES = [
   'USDT-ERC20', 'USDT-TRC20', 'USDT-TON', 'USDT-SOL', 'USDT-BEP20',
@@ -14,7 +14,7 @@ const CURRENCIES = [
 ];
 
 // On-chain assets: usable as the SELL (base) asset, and as an atomic quote leg.
-const ONCHAIN = ['POH', ...STABLE_TICKERS];
+const ONCHAIN = ['DAI', ...STABLE_TICKERS];
 
 const NETWORK_OPTIONS = {
   'USDT-ERC20':  ['ERC20'],
@@ -35,12 +35,12 @@ function defaultNetwork(cur) {
 
 export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getPrivateKey, onNavigate }) {
   const side = 'sell';
-  const [baseAsset, setBaseAsset] = useState('POH');
+  const [baseAsset, setBaseAsset] = useState('DAI');
   const [quoteCurrency, setQuoteCurrency] = useState('USDT-ERC20');
   // On-chain quote → atomic swap (settles instantly, no payment methods needed)
   const atomic = ONCHAIN.includes(quoteCurrency);
-  const [pohAmount, setPohAmount] = useState('');
-  const [pricePerPOH, setPricePerPOH] = useState('');
+  const [daiAmount, setDAIAmount] = useState('');
+  const [pricePerDAI, setPricePerDAI] = useState('');
   const [minTrade, setMinTrade] = useState('');
   const [maxTrade, setMaxTrade] = useState('');
   const [methods, setMethods] = useState([{ network: defaultNetwork('USDT-ERC20'), address: '', details: '' }]);
@@ -65,9 +65,9 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
 
   const submit = async () => {
     if (!selectedAddress) return Alert.alert('No wallet', 'Select a wallet first.');
-    const poh = parseFloat(pohAmount);
-    const price = parseFloat(pricePerPOH);
-    if (!poh || poh <= 0) return Alert.alert('Invalid', `Enter a valid ${assetMeta(baseAsset).display} amount.`);
+    const dai = parseFloat(daiAmount);
+    const price = parseFloat(pricePerDAI);
+    if (!dai || dai <= 0) return Alert.alert('Invalid', `Enter a valid ${assetMeta(baseAsset).display} amount.`);
     if (!price || price <= 0) return Alert.alert('Invalid', 'Enter a valid price.');
     if (baseAsset === quoteCurrency) return Alert.alert('Invalid', 'Sell asset and payment currency must differ.');
     const validMethods = atomic ? [] : methods.filter(m => m.network.trim());
@@ -84,19 +84,19 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
       }
 
       const baseDecimals = assetMeta(baseAsset).decimals;
-      const pohAmountMicro = Math.round(poh * 10 ** baseDecimals);
+      const daiAmountMicro = Math.round(dai * 10 ** baseDecimals);
       const minVal = parseFloat(minTrade) || 0;
-      const maxVal = parseFloat(maxTrade) || (poh * price);
+      const maxVal = parseFloat(maxTrade) || (dai * price);
 
       const result = await createOrder(activeNodeUrl, {
         address: selectedAddress,
         privateKeyHex: privateKey,
         side,
-        pohAmount: pohAmountMicro,
+        daiAmount: daiAmountMicro,
         baseAsset,
         baseDecimals,
         quoteCurrency,
-        pricePerPOH: price,
+        pricePerDAI: price,
         minTrade: minVal,
         maxTrade: maxVal,
         paymentMethods: validMethods,
@@ -105,7 +105,7 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
       if (result.error) {
         Alert.alert('Error', result.error);
       } else {
-        Alert.alert('Order Posted', `Your sell order for ${pohAmount} ${assetMeta(baseAsset).display} has been posted — locked in escrow.${atomic ? ' It settles atomically when taken.' : ''}`, [
+        Alert.alert('Order Posted', `Your sell order for ${daiAmount} ${assetMeta(baseAsset).display} has been posted — locked in escrow.${atomic ? ' It settles atomically when taken.' : ''}`, [
           { text: 'OK', onPress: () => onNavigate('p2p') },
         ]);
       }
@@ -157,8 +157,8 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
           placeholder="e.g. 100"
           placeholderTextColor="#555"
           keyboardType="numeric"
-          value={pohAmount}
-          onChangeText={setPohAmount}
+          value={daiAmount}
+          onChangeText={setDAIAmount}
         />
       </View>
 
@@ -189,8 +189,8 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
           placeholder="e.g. 0.50"
           placeholderTextColor="#555"
           keyboardType="numeric"
-          value={pricePerPOH}
-          onChangeText={setPricePerPOH}
+          value={pricePerDAI}
+          onChangeText={setPricePerDAI}
         />
       </View>
 
@@ -208,7 +208,7 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
           />
           <TextInput
             style={[styles.input, { flex: 1 }]}
-            placeholder={`Max (e.g. ${pohAmount && pricePerPOH ? (parseFloat(pohAmount) * parseFloat(pricePerPOH)).toFixed(2) : '500'})`}
+            placeholder={`Max (e.g. ${daiAmount && pricePerDAI ? (parseFloat(daiAmount) * parseFloat(pricePerDAI)).toFixed(2) : '500'})`}
             placeholderTextColor="#555"
             keyboardType="numeric"
             value={maxTrade}

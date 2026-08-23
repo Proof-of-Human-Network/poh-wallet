@@ -12,8 +12,8 @@ import { useFonts, Iceland_400Regular } from '@expo-google-fonts/iceland';
 import * as Clipboard from 'expo-clipboard';
 import QRCode from 'react-native-qrcode-svg';
 
-// 1 POH = 1e9 μPOH — matches node's reward.js
-const POH_DECIMALS = 1_000_000_000;
+// 1 DAI = 1e9 μDAI — matches node's reward.js
+const DAI_DECIMALS = 1_000_000_000;
 
 // === Clean imports from the new structured src/ ===
 import { STORAGE_KEYS, DEFAULT_WALLET_NODES } from './src/constants';
@@ -92,7 +92,7 @@ Notifications.setNotificationHandler({
 
 async function registerPushToken(walletAddress, nodeUrl) {
   try {
-    const token = await AsyncStorage.getItem('poh_push_token');
+    const token = await AsyncStorage.getItem('dai_push_token');
     if (!token || !walletAddress || !nodeUrl) return;
     const base = nodeUrl.replace(/\/$/, '');
     await fetch(`${base}/api/push/register`, {
@@ -122,7 +122,7 @@ async function showNotification(title, body) {
 // === Old duplicated storage / node functions removed ===
 // Now using src/services/storage.js and src/services/nodeClient.js
 
-export default function PoHMinerWallet() {
+export default function DAIMinerWallet() {
   const [fontsLoaded] = useFonts({
     Iceland_400Regular,
   });
@@ -132,9 +132,9 @@ export default function PoHMinerWallet() {
   const [p2pParams, setP2pParams] = useState({});
   const [wallets, setWallets] = useState([]); // {address, createdAt}[]
   const [selectedAddress, setSelectedAddress] = useState(null);
-  const [balances, setBalances] = useState({}); // address -> number (POH display units)
+  const [balances, setBalances] = useState({}); // address -> number (DAI display units)
   const [assetBalances, setAssetBalances] = useState({}); // address -> { ticker: displayNumber } (stablecoins)
-  const [sendCurrency, setSendCurrency] = useState('POH'); // asset picked in the Send screen
+  const [sendCurrency, setSendCurrency] = useState('DAI'); // asset picked in the Send screen
   const [txs, setTxs] = useState([]);
   const [localPendingTxs, setLocalPendingTxs] = useState([]);
 
@@ -157,7 +157,7 @@ export default function PoHMinerWallet() {
   // resubmits the SAME tx (idempotent at the node) instead of rebuilding at the
   // next nonce, which would silently send twice. Cleared on a confirmed submit.
   const pendingSendRef = useRef(null); // { key, signedTx }
-  const [pohUsdRate, setPohUsdRate] = useState(null);
+  const [daiUsdRate, setDaiUsdRate] = useState(null);
 
   // Refs to avoid stale closures in async node-calling functions
   const activeNodeUrlRef = useRef(activeNodeUrl);
@@ -230,7 +230,7 @@ export default function PoHMinerWallet() {
         await Storage.saveNodes(loadedNodes);
       }
 
-      // Auto-discover peers from bootnodes (miner.poh.ge/peers + fallbacks)
+      // Auto-discover peers from bootnodes (miner.iamai.kg/peers + fallbacks)
       // This ensures we get fresh miner nodes when static defaults are down or empty.
       try {
         const discovered = await discoverPeers();
@@ -406,7 +406,7 @@ export default function PoHMinerWallet() {
       const data = await res.json();
       if (typeof data.balance === 'number') {
         const oldBal = balances[address] || 0;
-        const newBal = data.balance / POH_DECIMALS; // μPOH → POH
+        const newBal = data.balance / DAI_DECIMALS; // μDAI → DAI
 
         setBalances(prev => ({ ...prev, [address]: newBal }));
 
@@ -453,13 +453,13 @@ export default function PoHMinerWallet() {
       const res = await callNodeApi(`/api/wallet/history?address=${encodeURIComponent(address)}&limit=50`);
       if (!res.ok) throw new Error('history http ' + res.status);
       const data = await res.json();
-      // History entries: { height, delta (μPOH, +recv/-sent), txHash, ts, label }
+      // History entries: { height, delta (μDAI, +recv/-sent), txHash, ts, label }
       const nodeTxs = (Array.isArray(data.entries) ? data.entries : []).map(e => ({
         id: e.txHash || `h${e.height}-${e.delta}`,
         type: (e.label === 'Mining reward' || e.txHash?.startsWith('reward-') || e.txHash?.startsWith('coinbase')) ? 'reward' : (e.delta > 0 ? 'receive' : 'send'),
         from: e.delta < 0 ? address : undefined,
         to:   e.delta > 0 ? address : undefined,
-        amount: Math.abs(e.delta || 0) / POH_DECIMALS,
+        amount: Math.abs(e.delta || 0) / DAI_DECIMALS,
         timestamp: e.ts || Date.now(),
         status: 'confirmed',
       }));
@@ -477,7 +477,7 @@ export default function PoHMinerWallet() {
     }
   }
 
-  async function fetchBestPohRate() {
+  async function fetchBestDAIRate() {
     const node = activeNodeUrlRef.current || activeNodeUrl;
     if (!node) return;
     try {
@@ -488,17 +488,17 @@ export default function PoHMinerWallet() {
         const data = await res.json();
         const orders = data.orders || [];
         for (const o of orders) {
-          if (o.pricePerPOH > 0 && (bestRate === null || o.pricePerPOH < bestRate)) {
-            bestRate = o.pricePerPOH;
+          if (o.pricePerDAI > 0 && (bestRate === null || o.pricePerDAI < bestRate)) {
+            bestRate = o.pricePerDAI;
           }
         }
       }
       // Always update: set to null if no orders so the USD line hides
-      setPohUsdRate(bestRate);
+      setDaiUsdRate(bestRate);
     } catch { /* network error — leave rate as-is */ }
   }
 
-  // Discover fresh peers from bootnodes (miner.poh.ge/peers first, then fallbacks)
+  // Discover fresh peers from bootnodes (miner.iamai.kg/peers first, then fallbacks)
   // Adds new nodes to the list and may switch to the best one.
   const refreshPeerDiscovery = async () => {
     setLoading(true);
@@ -556,7 +556,7 @@ export default function PoHMinerWallet() {
     await Promise.all([
       fetchBalance(selectedAddress, silent),
       fetchTransactions(selectedAddress),
-      fetchBestPohRate(),
+      fetchBestDAIRate(),
     ]);
   }
 
@@ -593,7 +593,7 @@ export default function PoHMinerWallet() {
         const tokenData = await Notifications.getExpoPushTokenAsync();
         const token = tokenData?.data;
         if (token) {
-          await AsyncStorage.setItem('poh_push_token', token);
+          await AsyncStorage.setItem('dai_push_token', token);
           // Upload is deferred until we have an active node (handled in registerPushToken)
         }
       } catch (_) {}
@@ -675,7 +675,7 @@ export default function PoHMinerWallet() {
         const warning = `Address:\n${address}\n\nPRIVATE KEY:\n${privateKey}\n\n` +
           `THIS IS THE ONLY TIME this private key will be shown without extra confirmation.\n\n` +
           `Copy it now and save it in a secure offline location.\n\n` +
-          `If you lose this key, you will permanently lose access to your POH funds.`;
+          `If you lose this key, you will permanently lose access to your DAI funds.`;
 
         // Show the key using alert (simple but works on web)
         alert(warning);
@@ -846,7 +846,7 @@ export default function PoHMinerWallet() {
           `Address:\n${address}\n\n` +
           `PRIVATE KEY:\n${key}\n\n` +
           '⚠️ NEVER share this key with anyone.\n' +
-          'Anyone who has this key can take all your POH.\n\n' +
+          'Anyone who has this key can take all your DAI.\n\n' +
           '(The key has been copied to your clipboard)'
         );
       } catch (e) {
@@ -955,7 +955,7 @@ export default function PoHMinerWallet() {
     setLoading(false);
   };
 
-  // ===== ON-CHAIN SEND — builds a signed PoHTransaction and submits to mempool =====
+  // ===== ON-CHAIN SEND — builds a signed DAITransaction and submits to mempool =====
   const send = async () => {
     const amount = parseFloat(sendAmount);
     const to = sendTo.trim();
@@ -969,8 +969,8 @@ export default function PoHMinerWallet() {
       Alert.alert(t('send.no_wallet'));
       return;
     }
-    // Balance check in the asset being sent (POH scalar vs per-asset map)
-    const availableBal = sendCurrency === 'POH'
+    // Balance check in the asset being sent (DAI scalar vs per-asset map)
+    const availableBal = sendCurrency === 'DAI'
       ? currentBalance
       : ((assetBalances[selectedAddress] || {})[sendCurrency] || 0);
     if (amount + fee > availableBal) {
@@ -1113,10 +1113,10 @@ export default function PoHMinerWallet() {
           <Text style={styles.label}>AVAILABLE BALANCE</Text>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: 6 }}>
             <Text style={styles.balance}>{currentBalance.toFixed(2)}</Text>
-            <Text style={styles.balanceCurrency}> POH</Text>
+            <Text style={styles.balanceCurrency}> DAI</Text>
           </View>
-          {pohUsdRate !== null && (
-            <Text style={styles.usd}>≈ ${(currentBalance * pohUsdRate).toFixed(2)} USD</Text>
+          {daiUsdRate !== null && (
+            <Text style={styles.usd}>≈ ${(currentBalance * daiUsdRate).toFixed(2)} USD</Text>
           )}
           {/* Stablecoin holdings — one row per non-zero asset */}
           {Object.entries(assetBalances[selectedAddress] || {}).filter(([, v]) => v > 0).map(([tk, v]) => (
@@ -1190,7 +1190,7 @@ export default function PoHMinerWallet() {
                     <Text style={[styles.txAmount, isOut && { color: '#ef4444' }]}>
                       {isOut ? '-' : '+'}{Number(item.amount || 0).toFixed(2)}
                     </Text>
-                    <Text style={styles.txStatus}>POH</Text>
+                    <Text style={styles.txStatus}>DAI</Text>
                   </View>
                 </View>
               );
@@ -1258,16 +1258,16 @@ export default function PoHMinerWallet() {
             />
             <Text style={styles.amountCurrency}>{assetMeta(sendCurrency).display}</Text>
             <Text style={styles.amountAvail}>
-              Available: {(sendCurrency === 'POH'
+              Available: {(sendCurrency === 'DAI'
                 ? currentBalance
                 : ((assetBalances[selectedAddress] || {})[sendCurrency] || 0)
               ).toFixed(2)} {assetMeta(sendCurrency).display}
             </Text>
           </View>
 
-          {/* Asset picker — POH + any stablecoins this wallet holds */}
+          {/* Asset picker — DAI + any stablecoins this wallet holds */}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-            {['POH', ...STABLE_TICKERS.filter(tk => ((assetBalances[selectedAddress] || {})[tk] || 0) > 0)].map(tk => (
+            {['DAI', ...STABLE_TICKERS.filter(tk => ((assetBalances[selectedAddress] || {})[tk] || 0) > 0)].map(tk => (
               <TouchableOpacity
                 key={tk}
                 onPress={() => setSendCurrency(tk)}
@@ -1289,7 +1289,7 @@ export default function PoHMinerWallet() {
                 <Text style={styles.presetText}>{amt} {assetMeta(sendCurrency).display}</Text>
               </TouchableOpacity>
             ))}
-            <TouchableOpacity style={styles.presetBtn} onPress={() => setSendAmount(String(Math.max(0, (sendCurrency === 'POH' ? currentBalance : ((assetBalances[selectedAddress] || {})[sendCurrency] || 0)) - fee).toFixed(sendCurrency === 'POH' ? 3 : 2)))}>
+            <TouchableOpacity style={styles.presetBtn} onPress={() => setSendAmount(String(Math.max(0, (sendCurrency === 'DAI' ? currentBalance : ((assetBalances[selectedAddress] || {})[sendCurrency] || 0)) - fee).toFixed(sendCurrency === 'DAI' ? 3 : 2)))}>
               <Text style={styles.presetText}>MAX</Text>
             </TouchableOpacity>
           </View>
@@ -1327,7 +1327,7 @@ export default function PoHMinerWallet() {
         <Modal visible={sendQrVisible} transparent={false} animationType="slide" onRequestClose={() => setSendQrVisible(false)}>
           <View style={{ flex: 1, backgroundColor: '#000' }}>
             <View style={styles.qrModalHeader}>
-              <Text style={styles.qrModalTitle}>Scan PoH Address</Text>
+              <Text style={styles.qrModalTitle}>Scan DAI Address</Text>
             </View>
             {sendCamPermission?.granted ? (
               <CameraView
@@ -1368,7 +1368,7 @@ export default function PoHMinerWallet() {
         <Header title={t('receive.title')} t={t} onSettingsPress={() => setCurrentScreen('settings')} />
 
         <View style={[styles.card, { alignItems: 'center', paddingVertical: 32 }]}>
-          <Text style={styles.sectionTitle}>RECEIVE POH</Text>
+          <Text style={styles.sectionTitle}>RECEIVE DAI</Text>
           {selectedAddress ? (
             <View style={{ backgroundColor: '#fff', padding: 14, borderRadius: 4, marginTop: 16 }}>
               <QRCode value={selectedAddress} size={200} color="#000" backgroundColor="#fff" />
@@ -1490,7 +1490,7 @@ export default function PoHMinerWallet() {
                   setCurrentScreen('home');
                 }}>
                   <Text style={styles.walletAddr} numberOfLines={1}>{w.address}</Text>
-                  <Text style={styles.walletBal}>{bal.toFixed(2)} POH</Text>
+                  <Text style={styles.walletBal}>{bal.toFixed(2)} DAI</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => {
                   try { revealPrivateKey(w.address); }
@@ -1650,7 +1650,7 @@ export default function PoHMinerWallet() {
                 <Text style={styles.primaryBtnText}>{t('settings.add_node')}</Text>
               </TouchableOpacity>
 
-              {/* Auto discovery from bootnodes: tries miner.poh.ge/peers first */}
+              {/* Auto discovery from bootnodes: tries miner.iamai.kg/peers first */}
               <TouchableOpacity
                 style={[styles.primaryBtn, { backgroundColor: '#0a7', marginTop: 8 }]}
                 onPress={refreshPeerDiscovery}
@@ -1659,7 +1659,7 @@ export default function PoHMinerWallet() {
                 <Text style={styles.primaryBtnText}>{t('settings.discover_peers')}</Text>
               </TouchableOpacity>
               <Text style={{ color: '#4b5563', fontSize: 11, marginTop: 4, fontFamily: 'Iceland_400Regular', lineHeight: 16 }}>
-                Checks /peers on miner.poh.ge + others; falls back to IPFS.
+                Checks /peers on miner.iamai.kg + others; falls back to IPFS.
               </Text>
             </>
           ) : settingsTab === 'language' ? (
@@ -1702,7 +1702,7 @@ export default function PoHMinerWallet() {
                       setCurrentScreen('home');
                     }}>
                       <Text style={styles.walletAddr} numberOfLines={1}>{w.address}</Text>
-                      <Text style={styles.walletBal}>{bal.toFixed(2)} POH</Text>
+                      <Text style={styles.walletBal}>{bal.toFixed(2)} DAI</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => {
                       try { revealPrivateKey(w.address); }

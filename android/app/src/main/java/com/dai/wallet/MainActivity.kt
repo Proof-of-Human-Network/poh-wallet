@@ -1,4 +1,4 @@
-package com.poh.wallet
+package com.dai.wallet
 
 import android.os.Build
 import android.os.Bundle

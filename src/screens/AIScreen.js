@@ -55,7 +55,7 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
   const [showEvidencePass, setShowEvidencePass] = useState(true);
   const [showEvidenceFail, setShowEvidenceFail] = useState(true);
 
-  // --- Profile state (view-only for PoH addr) ---
+  // --- Profile state (view-only for DAI addr) ---
   const [profileData, setProfileData] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState(null);
@@ -279,7 +279,7 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
     }
   }
 
-  // API key management is on proofofhuman.ge web — not available on node directly
+  // API key management is on iamai.kg web — not available on node directly
 
   // Pick from resolve results
   function pickResolve(hit) {
@@ -336,7 +336,7 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
     const p = scanProfile;
     const addr = p.address || resolvedDisplay || scanInput;
     const initials = getInitials(p.displayName || p.ens?.name || addr);
-    const hasId = p.worldId != null || p.poh != null || p.brightid != null || p.bab != null || p.humanity != null || p.nomis != null || p.humanTech != null;
+    const hasId = p.worldId != null || p.dai != null || p.brightid != null || p.bab != null || p.humanity != null || p.nomis != null || p.humanTech != null;
     return (
       <View style={styles.fullProfileRoot}>
         {/* Avatar + header */}
@@ -363,7 +363,7 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
           {p.ens && <View style={[styles.badgeSmall, styles.badgeOk]}><Text style={styles.badgeSmallText}>ENS: {p.ens.name || fmt(p.ens.address)}</Text></View>}
           {p.farcaster && <View style={[styles.badgeSmall, styles.badgeOk]}><Text style={styles.badgeSmallText}>🟣 {p.farcaster.handle || p.farcaster}</Text></View>}
           {p.worldId != null && <View style={[styles.badgeSmall, p.worldId ? styles.badgeOk : styles.badgeWarn]}><Text style={styles.badgeSmallText}>🌍 World ID</Text></View>}
-          {p.poh != null && <View style={[styles.badgeSmall, p.poh ? styles.badgeOk : styles.badgeWarn]}><Text style={styles.badgeSmallText}>⚖️ PoH</Text></View>}
+          {p.dai != null && <View style={[styles.badgeSmall, p.dai ? styles.badgeOk : styles.badgeWarn]}><Text style={styles.badgeSmallText}>⚖️ DAI</Text></View>}
           {p.brightid != null && <View style={[styles.badgeSmall, p.brightid ? styles.badgeOk : styles.badgeWarn]}><Text style={styles.badgeSmallText}>🔆 BrightID</Text></View>}
           {p.bab != null && <View style={[styles.badgeSmall, p.bab ? styles.badgeOk : styles.badgeWarn]}><Text style={styles.badgeSmallText}>🏦 BAB KYC</Text></View>}
           {p.gitcoin && <View style={[styles.badgeSmall, p.gitcoin.passing ? styles.badgeOk : styles.badgeWarn]}><Text style={styles.badgeSmallText}>{p.gitcoin.passing ? '✓' : '⚠'} Gitcoin {p.gitcoin.score?.toFixed(1)}</Text></View>}
@@ -389,14 +389,14 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
                 {p.worldId && <Text style={styles.idCheck}>✓</Text>}
               </View>
             )}
-            {p.poh != null && (
-              <View style={[styles.idCard, p.poh ? styles.idOk : styles.idNone]}>
+            {p.dai != null && (
+              <View style={[styles.idCard, p.dai ? styles.idOk : styles.idNone]}>
                 <Text style={styles.idIcon}>⚖️</Text>
                 <View style={styles.idBody}>
-                  <Text style={styles.idName}>Proof of Humanity</Text>
-                  <Text style={styles.idStatus}>{p.poh ? 'Registered' : 'Not registered'}</Text>
+                  <Text style={styles.idName}>Decentralized Artificial Intelligence</Text>
+                  <Text style={styles.idStatus}>{p.dai ? 'Registered' : 'Not registered'}</Text>
                 </View>
-                {p.poh && <Text style={styles.idCheck}>✓</Text>}
+                {p.dai && <Text style={styles.idCheck}>✓</Text>}
               </View>
             )}
             {p.brightid != null && (
@@ -586,7 +586,7 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
             <Text style={styles.smallBtnText}>Refresh</Text>
           </TouchableOpacity>
         )}
-        {!connectedAddr && <Text style={styles.muted}>Select a wallet to view its PoH profile.</Text>}
+        {!connectedAddr && <Text style={styles.muted}>Select a wallet to view its DAI profile.</Text>}
 
         {connectedAddr && (
           <>
@@ -595,7 +595,7 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
             {profileData === null && !profileLoading && (
               <View style={styles.profileCard}>
                 <Text style={styles.muted}>No profile cached for this address yet.</Text>
-                <Text style={styles.hint}>Run a scan on your address to generate a profile, or visit proofofhuman.ge to create an account and get an API key.</Text>
+                <Text style={styles.hint}>Run a scan on your address to generate a profile, or visit iamai.kg to create an account and get an API key.</Text>
               </View>
             )}
 
@@ -611,8 +611,8 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
                     {profileData.profile?.plan === 'startup' && <Text style={{ color: '#22c55e', fontSize: 13 }}> (100k scans/mo)</Text>}
                   </Text>
                   {(!profileData.profile?.plan || profileData.profile.plan === 'free') && (
-                    <Text style={styles.hint} onPress={() => Linking.openURL('https://proofofhuman.ge')}>
-                      Startup &amp; Enterprise API keys are available at proofofhuman.ge (tap to open)
+                    <Text style={styles.hint} onPress={() => Linking.openURL('https://iamai.kg')}>
+                      Startup &amp; Enterprise API keys are available at iamai.kg (tap to open)
                     </Text>
                   )}
                 </View>
@@ -643,7 +643,7 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
           <View style={styles.inputRow}>
             <TextInput
               style={styles.scanInput}
-              placeholder="0x… or poh… address, @handle, domain, or name"
+              placeholder="0x… or dai… address, @handle, domain, or name"
               placeholderTextColor="#666"
               value={scanInput}
               onChangeText={setScanInput}
@@ -789,7 +789,7 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
                 return (
                   <TouchableOpacity style={[styles.walletRow, isSel && styles.walletRowSel]} onPress={() => switchWallet(item.address)}>
                     <Text style={styles.walletRowAddr} numberOfLines={1}>{item.address}</Text>
-                    <Text style={styles.walletRowBal}>{bal.toFixed(2)} POH</Text>
+                    <Text style={styles.walletRowBal}>{bal.toFixed(2)} DAI</Text>
                   </TouchableOpacity>
                 );
               }}

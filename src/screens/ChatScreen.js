@@ -16,29 +16,29 @@ const MAX_ATTACH_BYTES = 1 * 1024 * 1024;
 const IMAGE_EXT_RE = /\.(png|jpe?g|webp|gif|bmp)$/i;
 const TEXT_EXT_RE = /\.(txt|md|markdown|json|csv|log|js|jsx|ts|tsx|py|html?|css|ya?ml|xml|sh|sql|rs|go|java|c|cpp|h|rb|php)$/i;
 
-// ── Log fee slider: 1 kPOH (=1000 μPOH, 1e-6 POH) → 1 POH, logarithmic ─────────
-const LOG_MIN = 0.000001, LOG_MAX = 1, LOG_STEPS = 200;   // floor = 1 kPOH = 1000 μPOH
-const _stepToPoh = s => s <= 0 ? LOG_MIN : LOG_MIN * Math.pow(LOG_MAX / LOG_MIN, (s - 1) / (LOG_STEPS - 1));
-const _pohToStep = v => v <= LOG_MIN ? 1 : Math.round(1 + (LOG_STEPS - 1) * Math.log(v / LOG_MIN) / Math.log(LOG_MAX / LOG_MIN));
+// ── Log fee slider: 1 kDAI (=1000 μDAI, 1e-6 DAI) → 1 DAI, logarithmic ─────────
+const LOG_MIN = 0.000001, LOG_MAX = 1, LOG_STEPS = 200;   // floor = 1 kDAI = 1000 μDAI
+const _stepToDai = s => s <= 0 ? LOG_MIN : LOG_MIN * Math.pow(LOG_MAX / LOG_MIN, (s - 1) / (LOG_STEPS - 1));
+const _daiToStep = v => v <= LOG_MIN ? 1 : Math.round(1 + (LOG_STEPS - 1) * Math.log(v / LOG_MIN) / Math.log(LOG_MAX / LOG_MIN));
 // Value at a fraction [0,1] of the log range — used by the preset marks.
-const _pctToPoh = pct => LOG_MIN * Math.pow(LOG_MAX / LOG_MIN, pct);
-// Preset marks: default 0% (= 1 kPOH = 1000 μPOH), low 25%, high 60%, max 100%.
+const _pctToDai = pct => LOG_MIN * Math.pow(LOG_MAX / LOG_MIN, pct);
+// Preset marks: default 0% (= 1 kDAI = 1000 μDAI), low 25%, high 60%, max 100%.
 const FEE_PRESETS = [
   { label: 'Default', pct: 0.00 },
   { label: 'Low',     pct: 0.25 },
   { label: 'High',    pct: 0.60 },
   { label: 'Max',     pct: 1.00 },
 ];
-const _fmtPoh = p => {
+const _fmtDai = p => {
   if (p <= 0) return '0';
-  const k = p * 1e6;                     // kPOH — 1 kPOH = 1000 μPOH = 1e-6 POH
-  if (k < 1000) return (k < 10 ? String(Math.round(k * 10) / 10) : Math.round(k).toLocaleString()) + ' kPOH';
-  if (p < 1)    return p.toPrecision(2) + ' POH';
-  return (p < 10 ? p.toFixed(2) : Math.round(p).toString()) + ' POH';
+  const k = p * 1e6;                     // kDAI — 1 kDAI = 1000 μDAI = 1e-6 DAI
+  if (k < 1000) return (k < 10 ? String(Math.round(k * 10) / 10) : Math.round(k).toLocaleString()) + ' kDAI';
+  if (p < 1)    return p.toPrecision(2) + ' DAI';
+  return (p < 10 ? p.toFixed(2) : Math.round(p).toString()) + ' DAI';
 };
 
 function LogSlider({ value, onChange, disabled }) {
-  const step = _pohToStep(value);
+  const step = _daiToStep(value);
   const fillPct = step <= 1 ? 0 : ((step - 1) / (LOG_STEPS - 1)) * 100;
 
   // Track geometry, kept in refs so the (once-created) PanResponder always reads
@@ -67,8 +67,8 @@ function LogSlider({ value, onChange, disabled }) {
   const panResponder = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => !disabled,
     onMoveShouldSetPanResponder:  () => !disabled,
-    onPanResponderGrant: (e) => { measureTrack(); onChange(_stepToPoh(stepFromPageX(e.nativeEvent.pageX))); },
-    onPanResponderMove:  (e) => onChange(_stepToPoh(stepFromPageX(e.nativeEvent.pageX))),
+    onPanResponderGrant: (e) => { measureTrack(); onChange(_stepToDai(stepFromPageX(e.nativeEvent.pageX))); },
+    onPanResponderMove:  (e) => onChange(_stepToDai(stepFromPageX(e.nativeEvent.pageX))),
   })).current;
 
   return (
@@ -158,10 +158,10 @@ const POLL_TIMEOUT_MS  = 120_000;
 // ── Main screen ───────────────────────────────────────────────────────────────
 export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress, balances, getPrivateKey }) {
   const [message,    setMessage]    = useState('');
-  const [budget,     setBudget]     = useState(_pctToPoh(0)); // default preset = 1 kPOH (1000 μPOH)
-  // Fee currency — POH (log slider) or a stablecoin (budget in display units,
+  const [budget,     setBudget]     = useState(_pctToDai(0)); // default preset = 1 kDAI (1000 μDAI)
+  // Fee currency — DAI (log slider) or a stablecoin (budget in display units,
   // converted to 2dp raw at submit). Miner receives exactly this currency.
-  const [feeCurrency, setFeeCurrency] = useState('POH');
+  const [feeCurrency, setFeeCurrency] = useState('DAI');
   const [loading,    setLoading]    = useState(false);
   const [statusText, setStatusText] = useState('');
   // Messenger-style conversation: [{ id, role: 'user'|'ai', text?, error?, ...skill fields }]
@@ -355,7 +355,7 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
         const install = await new Promise((resolve) => {
           Alert.alert(
             'Dataset required',
-            `Install "${askData.datasetId}" on this miner to answer?\n\n${askData.installInstructions || 'Stored under ~/.poh-miner/brain-data/hf-datasets/'}`,
+            `Install "${askData.datasetId}" on this miner to answer?\n\n${askData.installInstructions || 'Stored under ~/.dai-miner/brain-data/hf-datasets/'}`,
             [
               { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
               { text: 'Download', onPress: () => resolve(true) },
@@ -397,15 +397,15 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
       }
 
       // Skill path — budget converts at the fee currency's own decimals
-      const feeDecimals = feeCurrency === 'POH' ? 1_000_000_000 : 100;
-      const maxBudget = Math.max(feeCurrency === 'POH' ? 0 : 1, Math.round(budget * feeDecimals));
+      const feeDecimals = feeCurrency === 'DAI' ? 1_000_000_000 : 100;
+      const maxBudget = Math.max(feeCurrency === 'DAI' ? 0 : 1, Math.round(budget * feeDecimals));
       if (!(maxBudget > 0)) {
         setFeeOpen(true);
         Alert.alert('Fee Required', 'This question needs a real-time data skill. Set a fee using the slider and try again.');
         return;
       }
       if (!selectedAddress) { pushMsg({ role: 'ai', error: true, text: 'Select a wallet to pay the skill fee.' }); return; }
-      if (feeCurrency === 'POH' && budget > balance) { pushMsg({ role: 'ai', error: true, text: `Insufficient balance: ${balance.toFixed(2)} POH available.` }); return; }
+      if (feeCurrency === 'DAI' && budget > balance) { pushMsg({ role: 'ai', error: true, text: `Insufficient balance: ${balance.toFixed(2)} DAI available.` }); return; }
 
       // Fee-required job types need a signed payment proof (paymentTx) bound to
       // jobId + miner + amount + nonce — the node rejects them with 402 otherwise.
@@ -628,7 +628,7 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
           <View style={s.emptyState}>
             <Text style={s.emptyTitle}>Ask the network anything</Text>
             <Text style={s.emptyHint}>
-              Answers come from AI miners on the PoH network.{'\n'}
+              Answers come from AI miners on the DAI network.{'\n'}
               Real-time data skills charge the fee you set below.
             </Text>
           </View>
@@ -702,14 +702,14 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
           <View style={s.feePanel}>
             <View style={s.feeRow}>
               <Text style={s.label}>MAX FEE <Text style={s.labelNote}>(data skills only)</Text></Text>
-              <Text style={s.feeValue}>{feeCurrency === 'POH' ? _fmtPoh(budget) : `${budget.toFixed(2)} ${assetMeta(feeCurrency).display}`}</Text>
+              <Text style={s.feeValue}>{feeCurrency === 'DAI' ? _fmtDai(budget) : `${budget.toFixed(2)} ${assetMeta(feeCurrency).display}`}</Text>
             </View>
             {/* Fee currency chips — the miner receives exactly this currency */}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-              {['POH', ...STABLE_TICKERS].map(tk => (
+              {['DAI', ...STABLE_TICKERS].map(tk => (
                 <TouchableOpacity
                   key={tk}
-                  onPress={() => { setFeeCurrency(tk); if (tk !== 'POH' && budget < 0.01) setBudget(0.01); }}
+                  onPress={() => { setFeeCurrency(tk); if (tk !== 'DAI' && budget < 0.01) setBudget(0.01); }}
                   style={{
                     paddingVertical: 3, paddingHorizontal: 9, borderRadius: 11, borderWidth: 1,
                     borderColor: feeCurrency === tk ? '#22c55e' : '#1f2937',
@@ -724,8 +724,8 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
             <LogSlider value={budget} onChange={setBudget} disabled={loading} />
             <View style={s.presetRow}>
               {FEE_PRESETS.map(p => {
-                const pv = _pctToPoh(p.pct);
-                const active = Math.abs(_pohToStep(budget) - _pohToStep(pv)) <= 1;
+                const pv = _pctToDai(p.pct);
+                const active = Math.abs(_daiToStep(budget) - _daiToStep(pv)) <= 1;
                 return (
                   <TouchableOpacity
                     key={p.label}
@@ -739,7 +739,7 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
               })}
             </View>
             <Text style={s.feeNote}>
-              Balance: {balance.toFixed(2)} POH · fee only charged when a data skill is used
+              Balance: {balance.toFixed(2)} DAI · fee only charged when a data skill is used
             </Text>
           </View>
         ) : null}
@@ -753,7 +753,7 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
             onPress={() => setFeeOpen(o => !o)}
           >
             <Text style={[s.roundBtnText, { fontSize: 11, color: feeOpen ? '#22c55e' : '#6b7280' }]}>
-              {feeCurrency === 'POH' ? _fmtPoh(budget) : `${budget.toFixed(2)} ${assetMeta(feeCurrency).display}`}
+              {feeCurrency === 'DAI' ? _fmtDai(budget) : `${budget.toFixed(2)} ${assetMeta(feeCurrency).display}`}
             </Text>
           </TouchableOpacity>
           <TextInput

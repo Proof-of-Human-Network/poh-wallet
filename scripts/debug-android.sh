@@ -1,5 +1,5 @@
 #!/bin/bash
-# Debug PoH Wallet on connected Android device
+# Debug DAI Wallet on connected Android device
 #
 # Prerequisites:
 # - Android device connected via USB with USB Debugging enabled + authorized
@@ -8,7 +8,7 @@
 
 set -e
 
-echo "=== PoH Wallet Android Debug Helper ==="
+echo "=== DAI Wallet Android Debug Helper ==="
 echo ""
 
 ADB_CMD="$(which adb 2>/dev/null || echo 'adb')"
@@ -62,7 +62,7 @@ case $choice in
     echo ""
     echo "App is running on device."
     echo "Dev Menu: $ADB_CMD -s $DEVICE_ID shell input keyevent 82"
-    echo "Filtered logs: $ADB_CMD -s $DEVICE_ID logcat | grep -i 'poh\|react-native' --line-buffered"
+    echo "Filtered logs: $ADB_CMD -s $DEVICE_ID logcat | grep -i 'dai\|react-native' --line-buffered"
     ;;
   3)
     echo ""
@@ -80,11 +80,11 @@ esac
 echo ""
 echo "Other useful commands (run in another terminal):"
 echo "  $ADB_CMD -s $DEVICE_ID reverse tcp:8081 tcp:8081   # for localhost connections from app"
-echo "  $ADB_CMD -s $DEVICE_ID logcat -c ; $ADB_CMD -s $DEVICE_ID logcat | grep -i 'poh\|expo\|react' --line-buffered"
+echo "  $ADB_CMD -s $DEVICE_ID logcat -c ; $ADB_CMD -s $DEVICE_ID logcat | grep -i 'dai\|expo\|react' --line-buffered"
 echo "  $ADB_CMD -s $DEVICE_ID shell input keyevent 82    # open dev menu anytime"
 echo ""
 echo "To force launch the app on the device (Expo Go must be installed):"
 echo "  $ADB_CMD -s $DEVICE_ID shell am start -a android.intent.action.VIEW -d \"exp://127.0.0.1:8081\" host.exp.exponent"
 echo "  (replace 127.0.0.1 with your LAN IP from 'expo start' output if reverse not used, e.g. exp://192.168.x.x:8081 )"
 echo ""
-echo "For the PoH node side (if running the miner on another machine): make sure your config has good RPCs and Ollama models pulled (qwen2.5:1.5b etc) so real POH works and no low-quality rejections."
+echo "For the DAI node side (if running the miner on another machine): make sure your config has good RPCs and Ollama models pulled (qwen2.5:1.5b etc) so real DAI works and no low-quality rejections."

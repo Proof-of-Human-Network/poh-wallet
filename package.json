@@ -1,5 +1,5 @@
 {
-  "name": "poh-miner-wallet",
+  "name": "dai-miner-wallet",
   "version": "0.4.1",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {

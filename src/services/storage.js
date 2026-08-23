@@ -46,7 +46,7 @@ export async function saveString(key, value) {
 
 // Private keys (sensitive)
 export async function storePrivateKey(address, privHex) {
-  const key = `poh_pk_${address}`;
+  const key = `dai_pk_${address}`;
   const available = await isSecureStoreAvailable();
   if (available) {
     await SecureStore.setItemAsync(key, privHex);
@@ -56,7 +56,7 @@ export async function storePrivateKey(address, privHex) {
 }
 
 export async function getPrivateKey(address) {
-  const key = `poh_pk_${address}`;
+  const key = `dai_pk_${address}`;
   const available = await isSecureStoreAvailable();
   if (available) {
     return SecureStore.getItemAsync(key);
@@ -66,7 +66,7 @@ export async function getPrivateKey(address) {
 }
 
 export async function deletePrivateKey(address) {
-  const key = `poh_pk_${address}`;
+  const key = `dai_pk_${address}`;
   const available = await isSecureStoreAvailable();
   try {
     if (available) {

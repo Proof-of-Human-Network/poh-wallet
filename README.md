@@ -1,14 +1,14 @@
-# PoH Miner Wallet
+# DAI Miner Wallet
 
-React Native mobile wallet for the PoH Miner Network. Connects to any running miner node for live balances, token transfers, transaction history, and AI-powered identity scanning.
+React Native mobile wallet for the DAI Miner Network. Connects to any running miner node for live balances, token transfers, transaction history, and AI-powered identity scanning.
 
 ## Features
 
-- **Multi-wallet** — create or import any number of PoH addresses
+- **Multi-wallet** — create or import any number of DAI addresses
 - **Live balance** — polls the connected miner node every ~8 s
 - **Send / Receive** — real on-chain signed transfers with QR scan
 - **Transaction history** — node history merged with local pending txs
-- **AI Screen** — submit wallet addresses for human/AI identity verification; displays verdict, confidence, sanctions check (OFAC, EU, UK), and full PoH profile
+- **AI Screen** — submit wallet addresses for human/AI identity verification; displays verdict, confidence, sanctions check (OFAC, EU, UK), and full DAI profile
 - **Ask AI (Chat)** — chat with the miner network; autocomplete from on-chain job history (`/api/search/suggest`) and cached replies for repetitive questions (`/api/search/history-match`)
 - **Multi-node failover** — connects to the fastest available node; auto-switches on failure
 - **IPFS peer discovery** — when no node is configured or all nodes are offline, discovers active miners from the IPFS peer directory published by the bootnode
@@ -18,7 +18,7 @@ React Native mobile wallet for the PoH Miner Network. Connects to any running mi
 ## Quick Start
 
 ```bash
-cd poh-miner-wallet
+cd dai-miner-wallet
 npm install
 npx expo start
 ```
@@ -45,15 +45,15 @@ eas build -p android --profile production
 
 ## Connecting to a Miner Node
 
-The wallet communicates with any `poh-miner-network` node over HTTP.
+The wallet communicates with any `dai-miner-network` node over HTTP.
 
 **Discovery:** On load and on failure, the wallet automatically queries bootnodes for peers:
-- Primary: `https://miner.poh.ge/peers`
+- Primary: `https://miner.iamai.kg/peers`
 - Then community bootnodes
 - Falls back to `/ipfs/latest` + IPFS if needed.
 - Discovered peers (with `host` + `walletApiPort`) are added as `http://...` nodes.
 
-**Defaults:** `https://miner.poh.ge`
+**Defaults:** `https://miner.iamai.kg`
 
 To add your own: **Settings → Nodes → Add** (e.g. `http://192.168.1.100:3456`).
 
@@ -88,11 +88,11 @@ wallet → GET bootnode/ipfs/latest → { peers: { cid } }
 
 ## AI Screen
 
-The **AI** tab lets you scan any blockchain address for its Proof of Humanity identity:
+The **AI** tab lets you scan any blockchain address for its Decentralized Artificial Intelligence identity:
 
 1. Enter an address (paste or scan QR)
 2. The wallet submits a job to the connected miner node
-3. The miner runs the full PoH checker (100+ signals across EVM, Solana, Bitcoin, TON, TRON, Stellar) and the AI brain
+3. The miner runs the full DAI checker (100+ signals across EVM, Solana, Bitcoin, TON, TRON, Stellar) and the AI brain
 4. Results show: **HUMAN / AI / UNCERTAIN** verdict with confidence, sanctions check (OFAC, EU, UK), and detailed signal evidence
 5. You can submit feedback to correct the AI verdict — this is relayed to the miner network and improves brain weights globally
 
@@ -123,12 +123,12 @@ App.js                   Root component
 
 ## Transactions
 
-Transfers are signed `PoHTransaction` objects:
+Transfers are signed `DAITransaction` objects:
 
 ```json
 {
-  "from": "poh...",
-  "to": "poh...",
+  "from": "dai...",
+  "to": "dai...",
   "amount": 100000000,
   "fee": 0,
   "nonce": 3,
@@ -139,6 +139,6 @@ Transfers are signed `PoHTransaction` objects:
 }
 ```
 
-`nonce` is the sender's transaction count — prevents replay attacks. The miner node validates `nonce === account.nonce + 1` before applying. Amounts are in **μPOH** (1 POH = 1,000,000,000 μPOH).
+`nonce` is the sender's transaction count — prevents replay attacks. The miner node validates `nonce === account.nonce + 1` before applying. Amounts are in **μDAI** (1 DAI = 1,000,000,000 μDAI).
 
-Wallet keys: private key hex is entropy; address + signing key derived deterministically. Address is canonically `poh + sha256(rawBase64Ed25519Pub).slice(0,40)` to allow register-key + signed submit.
+Wallet keys: private key hex is entropy; address + signing key derived deterministically. Address is canonically `dai + sha256(rawBase64Ed25519Pub).slice(0,40)` to allow register-key + signed submit.

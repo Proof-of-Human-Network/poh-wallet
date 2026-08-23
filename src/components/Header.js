@@ -10,7 +10,7 @@ export default function Header({ title, onSettingsPress, t }) {
           style={styles.logo} 
           resizeMode="contain"
         />
-        <Text style={styles.title}>{title || (t ? t('app.title') : 'POH Wallet')}</Text>
+        <Text style={styles.title}>{title || (t ? t('app.title') : 'DAI Wallet')}</Text>
       </View>
       <TouchableOpacity onPress={onSettingsPress}>
         <Text style={styles.settingsLink}>
@@ -33,9 +33,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logo: {
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
     marginRight: 8,
+    borderRadius: 8,
   },
   title: {
     fontSize: 26,

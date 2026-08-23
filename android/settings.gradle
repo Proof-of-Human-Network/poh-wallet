@@ -44,7 +44,7 @@ if (getRNMinorVersion() >= 75) {
   }
 }
 
-rootProject.name = 'PoH Wallet'
+rootProject.name = 'DAI Wallet'
 
 dependencyResolutionManagement {
   versionCatalogs {
