@@ -1,6 +1,6 @@
 # App Assets (DAI Wallet)
 
-Icons use the AIHub leaf + wordmark logo (cream `#FEEDE2`, pink leaf, navy “AIHub”).
+Icons use the DAI wordmark in Iceland (same style as the original POH mark), white on black.
 
 ## Files
 
@@ -8,16 +8,15 @@ Icons use the AIHub leaf + wordmark logo (cream `#FEEDE2`, pink leaf, navy “AI
 |-------------------------|-------------|-----------------------------------------------------------------------|
 | `icon.png`              | 1024×1024   | Main app icon (iOS + Android fallback)                                |
 | `adaptive-icon.png`     | 1024×1024   | Android adaptive foreground (inset so the wordmark survives circular crop) |
-| `splash.png`            | 720×1280    | Splash on cream `#FEEDE2`                                             |
-| `favicon.png`           | 192×192     | Web favicon                                                           |
-| `logo.png`              | 256×256     | In-app header logo                                                    |
-| `logos/aihub-logo.png`  | 756×756     | Canonical source mark                                                 |
+| `splash.png`            | 720×1280    | Splash on black `#000000`                                             |
+| `favicon.png`           | 48×48       | Web favicon                                                           |
+| `logo.png`              | 1024×1024   | In-app header logo                                                    |
 
 ## Build configuration
 
 - App name: **DAI Wallet** (`app.json`)
 - Android package: `com.dai.wallet`
-- Adaptive icon background: `#FEEDE2`
+- Adaptive icon background: `#000000`
 - Native mipmaps under `android/app/src/main/res/mipmap-*` match this logo
 
 ## After replacing the icons

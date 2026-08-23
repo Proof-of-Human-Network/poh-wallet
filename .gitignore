@@ -40,3 +40,4 @@ yarn.lock
 *.log
 package-lock.json
 yarn.lock
+local.properties
