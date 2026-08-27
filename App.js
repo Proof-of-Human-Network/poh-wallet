@@ -410,7 +410,7 @@ export default function DAIMinerWallet() {
 
         setBalances(prev => ({ ...prev, [address]: newBal }));
 
-        // Per-asset stablecoin balances (aiGEL … in display units)
+        // Per-asset stablecoin balances (aiETB … in display units)
         if (data.assets && typeof data.assets === 'object') {
           const held = {};
           for (const [tk, v] of Object.entries(data.assets)) {

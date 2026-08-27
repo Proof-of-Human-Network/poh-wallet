@@ -4,7 +4,7 @@ import {
   Alert, ActivityIndicator, TextInput,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { assetMeta } from '../constants/assets';
+import { assetMeta, ONCHAIN_ASSETS } from '../constants/assets';
 import {
   fetchTrade, fetchOrder, selectOrder,
   markPaymentSent, releaseTrade, cancelTrade, disputeTrade,
@@ -112,8 +112,7 @@ export default function TradeScreen({
     if (!order) return;
     const baseDec = 10 ** assetMeta((order && order.baseAsset) || 'DAI').decimals;
     const daiMicro = Math.round(dai * baseDec);
-    const ONCHAIN_Q = ['DAI', 'aiGEL', 'KGST', 'aiETB', 'aiBTN'];
-    const quoteIsOnchain = ONCHAIN_Q.includes(order.quoteCurrency);
+    const quoteIsOnchain = ONCHAIN_ASSETS.includes(order.quoteCurrency);
     const quoteDisplay = dai * order.pricePerDAI;
     // On-chain quote legs are debited in raw units of the quote asset
     const quoteAmount = quoteIsOnchain
