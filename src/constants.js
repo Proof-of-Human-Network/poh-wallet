@@ -23,7 +23,6 @@ export const DEFAULT_BOOTNODES = [
 // Supported languages for the wallet (top 20 + additional requested languages)
 export const SUPPORTED_LANGUAGES = [
   { code: 'en', name: 'English', nativeName: 'English' },
-  { code: 'ka', name: 'Georgian', nativeName: 'ქართული' },
   { code: 'zh', name: 'Chinese (Simplified)', nativeName: '简体中文' },
   { code: 'hi', name: 'Hindi', nativeName: 'हिन्दी' },
   { code: 'es', name: 'Spanish', nativeName: 'Español' },
