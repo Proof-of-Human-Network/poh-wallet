@@ -5,8 +5,11 @@ import { STABLE_TICKERS, assetMeta } from '../constants/assets';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   ActivityIndicator, StyleSheet, Alert, PanResponder,
-  KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform, Modal,
 } from 'react-native';
+// Mirrors FEEDBACK_COMMENT_MAX in dev/node/src/miner-node.js — keep in sync.
+const FEEDBACK_COMMENT_MAX = 300;
+
 import * as Clipboard from 'expo-clipboard';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
@@ -167,6 +170,13 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
   // Messenger-style conversation: [{ id, role: 'user'|'ai', text?, error?, ...skill fields }]
   const [messages,   setMessages]   = useState([]);
   const [attachedFile, setAttachedFile] = useState(null); // { name, kind, content?|dataUrl?, mime?, size? }
+
+  // Star-rating dialog: which message is being rated, and the draft comment.
+  const [fbTarget,  setFbTarget]  = useState(null);
+  const [fbStars,   setFbStars]   = useState(0);
+  const [fbComment, setFbComment] = useState('');
+  const [fbSending, setFbSending] = useState(false);
+  const [fbError,   setFbError]   = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [historyBanner, setHistoryBanner] = useState(null);
   const [feeOpen, setFeeOpen] = useState(false);
@@ -521,15 +531,47 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
     Alert.alert('Copied', 'Response copied to clipboard');
   };
 
-  const sendFeedback = async (msg, stars) => {
+  // Tapping a star opens the dialog rather than submitting straight away, so the
+  // user can say why. `comment` is capped at FEEDBACK_COMMENT_MAX, matching the
+  // node's own limit on POST /api/jobs/:id/feedback.
+  const openFeedback = (msg, stars) => {
     if (!msg.jobId || msg.feedback) return;
+    setFbTarget(msg);
+    setFbStars(stars);
+    setFbComment('');
+    setFbError('');
+    setFbSending(false);
+  };
+
+  const closeFeedback = () => { if (!fbSending) setFbTarget(null); };
+
+  const submitFeedback = async () => {
+    if (!fbTarget || fbSending) return;
+    setFbSending(true);
+    setFbError('');
     try {
-      await fetch(`${activeNodeUrl.replace(/\/$/, '')}/api/jobs/${msg.jobId}/feedback`, {
+      const res = await fetch(`${activeNodeUrl.replace(/\/$/, '')}/api/jobs/${fbTarget.jobId}/feedback`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stars, requesterAddress: selectedAddress }),
+        body: JSON.stringify({
+          stars: fbStars,
+          comment: fbComment.trim().slice(0, FEEDBACK_COMMENT_MAX),
+          requesterAddress: selectedAddress,
+        }),
       });
-      patchMsg(msg.id, { feedback: stars });
-    } catch { Alert.alert('Error', 'Could not submit feedback.'); }
+      if (!res.ok) {
+        let m = `Request failed (${res.status})`;
+        try { const j = await res.json(); if (j?.error) m = j.error; } catch {}
+        setFbError(m);
+        setFbSending(false);
+        return;
+      }
+      patchMsg(fbTarget.id, { feedback: fbStars });
+      setFbTarget(null);
+      setFbSending(false);
+    } catch (e) {
+      setFbError(e.message || 'Could not submit feedback.');
+      setFbSending(false);
+    }
   };
 
   const renderSkillOutput = (output) => {
@@ -597,7 +639,7 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
               <View style={s.feedbackRow}>
                 <Text style={s.feedbackLabel}>Rate this:</Text>
                 {[1, 2, 3, 4, 5].map(n => (
-                  <TouchableOpacity key={n} style={s.starBtn} onPress={() => sendFeedback(msg, n)}>
+                  <TouchableOpacity key={n} style={s.starBtn} onPress={() => openFeedback(msg, n)}>
                     <Text style={s.starBtnText}>★</Text>
                   </TouchableOpacity>
                 ))}
@@ -780,6 +822,56 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
           </TouchableOpacity>
         </View>
       </View>
+      {/* ── Star-rating feedback dialog ─────────────────────────────────── */}
+      <Modal visible={!!fbTarget} transparent animationType="fade" onRequestClose={closeFeedback}>
+        <View style={s.fbOverlay}>
+          <View style={s.fbCard}>
+            <Text style={s.fbTitle}>Rate this answer</Text>
+            <Text style={s.fbSub}>Your rating and comment train the node's brain and shape later replies.</Text>
+
+            <View style={s.fbStars}>
+              {[1, 2, 3, 4, 5].map(n => (
+                <TouchableOpacity key={n} onPress={() => setFbStars(n)} style={s.fbStarBtn}>
+                  <Text style={[s.fbStar, n <= fbStars && s.fbStarOn]}>★</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TextInput
+              style={s.fbInput}
+              value={fbComment}
+              onChangeText={t => setFbComment(t.slice(0, FEEDBACK_COMMENT_MAX))}
+              maxLength={FEEDBACK_COMMENT_MAX}
+              placeholder="What was good or wrong about it? (optional)"
+              placeholderTextColor="#4b5563"
+              multiline
+              textAlignVertical="top"
+              editable={!fbSending}
+            />
+            <Text style={[s.fbCount, fbComment.length >= FEEDBACK_COMMENT_MAX && s.fbCountLimit]}>
+              {fbComment.length}/{FEEDBACK_COMMENT_MAX}
+            </Text>
+
+            {fbError ? <Text style={s.fbError}>{fbError}</Text> : null}
+
+            <View style={s.fbActions}>
+              <TouchableOpacity style={s.fbBtn} onPress={closeFeedback} disabled={fbSending}>
+                <Text style={s.fbBtnText}>Skip</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.fbBtn, s.fbBtnPrimary, fbSending && s.fbBtnDisabled]}
+                onPress={submitFeedback}
+                disabled={fbSending}
+              >
+                {fbSending
+                  ? <ActivityIndicator size="small" color="#04140a" />
+                  : <Text style={[s.fbBtnText, s.fbBtnPrimaryText]}>Submit</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </KeyboardAvoidingView>
   );
 }
@@ -881,6 +973,26 @@ const s = StyleSheet.create({
   feedbackRow:  { flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 4 },
   feedbackLabel: { color: '#4b5563', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20, marginRight: 4 },
   starBtn:      { padding: 2 },
+
+  // Star-rating dialog
+  fbOverlay:     { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  fbCard:        { width: '100%', maxWidth: 420, backgroundColor: '#0d0d0d', borderWidth: 1, borderColor: '#262626', borderRadius: 12, padding: 18 },
+  fbTitle:       { color: '#e5e7eb', fontSize: 15, fontWeight: '600' },
+  fbSub:         { color: '#6b7280', fontSize: 11, marginTop: 3, marginBottom: 12 },
+  fbStars:       { flexDirection: 'row', gap: 6, marginBottom: 12 },
+  fbStarBtn:     { padding: 2 },
+  fbStar:        { fontSize: 26, color: '#2a2a2a' },
+  fbStarOn:      { color: '#facc15' },
+  fbInput:       { minHeight: 88, backgroundColor: '#070707', borderWidth: 1, borderColor: '#232323', borderRadius: 8, color: '#e5e7eb', fontSize: 13, padding: 10 },
+  fbCount:       { color: '#6b7280', fontSize: 10, textAlign: 'right', marginTop: 4 },
+  fbCountLimit:  { color: '#f59e0b' },
+  fbError:       { color: '#ef4444', fontSize: 11, marginTop: 8 },
+  fbActions:     { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 14 },
+  fbBtn:         { paddingVertical: 9, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1, borderColor: '#2a2a2a', backgroundColor: '#141414', minWidth: 84, alignItems: 'center' },
+  fbBtnText:     { color: '#9ca3af', fontSize: 13 },
+  fbBtnPrimary:  { backgroundColor: '#16a34a', borderColor: '#16a34a' },
+  fbBtnPrimaryText: { color: '#04140a', fontWeight: '700' },
+  fbBtnDisabled: { opacity: 0.7 },
   starBtnText:  { fontSize: 20, color: '#374151' },
   feedbackDone: { color: '#6b7280', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20, marginTop: 10 },
 });
