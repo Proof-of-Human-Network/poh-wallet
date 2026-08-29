@@ -369,7 +369,7 @@ export default function TradeScreen({
           <View style={styles.infoBox}>
             <Text style={[styles.infoText, { color: '#dc2626' }]}>
               This trade is under dispute.{'\n'}Reason: {trade.disputeReason || 'Not specified'}{'\n\n'}
-              Contact support@assetux.com with your trade ID: {trade.id}
+              Contact https://t.me/aist_exchange with your trade ID: {trade.id}
             </Text>
           </View>
         )}
