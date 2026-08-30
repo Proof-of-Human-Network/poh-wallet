@@ -73,6 +73,21 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
     const validMethods = atomic ? [] : methods.filter(m => m.network.trim());
     if (!atomic && validMethods.length === 0) return Alert.alert('Invalid', 'Add at least one payment method.');
 
+    // Trade limits, checked with the other pre-flight validation so an
+    // incoherent order is rejected before a private key is ever unsealed. The
+    // node enforces the same rules; this is so the user sees which field is
+    // wrong rather than a generic API error.
+    const minVal = parseFloat(minTrade) || 0;
+    const maxVal = parseFloat(maxTrade) || (dai * price);
+    if (minVal < 0) return Alert.alert('Invalid limit', 'Minimum trade cannot be negative.');
+    if (!(maxVal > 0)) return Alert.alert('Invalid limit', 'Maximum trade must be greater than zero.');
+    if (minVal > maxVal) {
+      return Alert.alert('Invalid limits', `Minimum (${minVal}) cannot be greater than maximum (${maxVal}).`);
+    }
+    if (maxVal > dai * price * (1 + 1e-9)) {
+      return Alert.alert('Invalid limit', `Maximum (${maxVal}) is more than this order is worth (${(dai * price).toFixed(2)} ${quoteCurrency}).`);
+    }
+
     setSubmitting(true);
     try {
       const privateKey = await getPrivateKey(selectedAddress);
@@ -85,8 +100,6 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
 
       const baseDecimals = assetMeta(baseAsset).decimals;
       const daiAmountMicro = Math.round(dai * 10 ** baseDecimals);
-      const minVal = parseFloat(minTrade) || 0;
-      const maxVal = parseFloat(maxTrade) || (dai * price);
 
       const result = await createOrder(activeNodeUrl, {
         address: selectedAddress,
