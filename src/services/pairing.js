@@ -1,4 +1,5 @@
 import nacl from 'tweetnacl';
+import './prng';   // side effect: tweetnacl has no randomness source in RN without it
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { deriveSigningKeypair, signData } from './signing';

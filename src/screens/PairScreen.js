@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, TextInput,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as Clipboard from 'expo-clipboard';
 import { PairSession, describeRequest, isSecureEnough, parsePairingUri } from '../services/pairing';
 import { getPrivateKey } from '../services/storage';
 
@@ -18,7 +19,8 @@ export default function PairScreen({ wallets = [], selectedAddress, nodeUrl, t }
   const [cameraVisible, setCameraVisible] = useState(false);
   const [scanned, setScanned] = useState(false);
 
-  const [pendingUri, setPendingUri] = useState(null);     // scanned, awaiting address choice
+  const [pendingUri, setPendingUri] = useState(null);     // scanned or pasted, awaiting address choice
+  const [linkText, setLinkText] = useState('');           // pairing link typed or pasted by hand
   const [sessions, setSessions] = useState([]);           // live PairSession objects
   const [request, setRequest] = useState(null);           // { session, req } awaiting approval
   const [busy, setBusy] = useState(false);
@@ -93,6 +95,36 @@ export default function PairScreen({ wallets = [], selectedAddress, nodeUrl, t }
     }
   }, [scanned]);
 
+  /**
+   * Pair from a link instead of a QR code — the only option on a desktop
+   * browser, and the fallback when a camera is unavailable or refuses the code.
+   * Goes through exactly the same validation as a scan, so a bad link is
+   * rejected before the user is asked to choose an address.
+   */
+  function submitLink(raw) {
+    const uri = (raw || '').trim();
+    if (!uri) { setError('Paste the pairing link first.'); return; }
+    setError(null);
+    try {
+      parsePairingUri(uri);
+      setPendingUri(uri);
+      setLinkText('');
+    } catch (e) {
+      setError(pairError(e.message));
+    }
+  }
+
+  async function pasteLink() {
+    try {
+      const text = await Clipboard.getStringAsync();
+      if (!text) { setError('Clipboard is empty.'); return; }
+      setLinkText(text.trim());
+      submitLink(text);
+    } catch {
+      setError('Could not read the clipboard.');
+    }
+  }
+
   /** The user picks which address this session may sign for. */
   async function bindSession(address) {
     setBusy(true);
@@ -159,6 +191,30 @@ export default function PairScreen({ wallets = [], selectedAddress, nodeUrl, t }
         <TouchableOpacity style={styles.primary} onPress={openScanner} disabled={!secure}>
           <Text style={styles.primaryText}>Scan pairing code</Text>
         </TouchableOpacity>
+
+        <Text style={styles.orText}>or paste the pairing link</Text>
+        <TextInput
+          style={styles.linkInput}
+          value={linkText}
+          onChangeText={setLinkText}
+          placeholder="aist://pair?v=1&relay=…"
+          placeholderTextColor="#6b7280"
+          autoCapitalize="none"
+          autoCorrect={false}
+          multiline
+          onSubmitEditing={() => submitLink(linkText)}
+        />
+        <View style={styles.linkRow}>
+          <TouchableOpacity style={styles.linkBtn} onPress={pasteLink}>
+            <Text style={styles.linkBtnText}>Paste</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.linkBtn, styles.linkBtnPrimary]}
+            onPress={() => submitLink(linkText)}
+          >
+            <Text style={styles.linkBtnText}>Connect</Text>
+          </TouchableOpacity>
+        </View>
 
         {error && <Text style={styles.error}>{error}</Text>}
 
@@ -290,6 +346,19 @@ const styles = StyleSheet.create({
   ghost: { borderWidth: 1, borderColor: '#374151', paddingVertical: 13, borderRadius: 4, alignItems: 'center', marginTop: 10 },
   ghostText: { color: '#9ca3af', fontSize: 15, fontFamily: 'Iceland_400Regular' },
   section: { color: '#fff', fontSize: 16, marginTop: 24, marginBottom: 8, fontFamily: 'Iceland_400Regular' },
+  orText: { color: '#6b7280', fontSize: 13, textAlign: 'center', marginTop: 14, marginBottom: 6, fontFamily: 'Iceland_400Regular' },
+  linkInput: {
+    borderWidth: 1, borderColor: '#374151', borderRadius: 4, color: '#fff',
+    paddingHorizontal: 10, paddingVertical: 9, fontSize: 13, minHeight: 46,
+    textAlignVertical: 'top', fontFamily: 'Iceland_400Regular',
+  },
+  linkRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  linkBtn: {
+    flex: 1, borderWidth: 1, borderColor: '#374151', paddingVertical: 11,
+    borderRadius: 4, alignItems: 'center',
+  },
+  linkBtnPrimary: { borderColor: '#22c55e' },
+  linkBtnText: { color: '#9ca3af', fontSize: 14, fontFamily: 'Iceland_400Regular' },
   muted: { color: '#4b5563', fontSize: 13, lineHeight: 19, fontFamily: 'Iceland_400Regular' },
   error: { color: '#ef4444', fontSize: 13, marginTop: 10, fontFamily: 'Iceland_400Regular' },
   warnBox: { borderWidth: 1, borderColor: '#b45309', backgroundColor: '#1c1917', borderRadius: 4, padding: 10, marginBottom: 10 },
