@@ -44,6 +44,7 @@ import {
   SettingsScreen,
   ChatScreen,
   P2PScreen,
+  PairScreen,
   CreateOrderScreen,
   TradeScreen,
   MyOrdersScreen,
@@ -128,7 +129,7 @@ export default function DAIMinerWallet() {
   });
 
   const [currentScreen, setCurrentScreen] = useState('home');
-  const [p2pScreen, setP2pScreen] = useState('p2p'); // 'p2p' | 'createOrder' | 'orderDetail' | 'trade' | 'myOrders'
+  const [p2pScreen, setP2pScreen] = useState('p2p'); // 'p2p' | 'createOrder' | 'orderDetail' | 'trade' | 'myOrders' | 'pair'
   const [p2pParams, setP2pParams] = useState({});
   const [wallets, setWallets] = useState([]); // {address, createdAt}[]
   const [selectedAddress, setSelectedAddress] = useState(null);
@@ -1819,6 +1820,22 @@ export default function DAIMinerWallet() {
         <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} onLayout={onLayoutRootView}>
           <StatusBar barStyle="light-content" backgroundColor="#000" />
           <MyOrdersScreen {...commonProps} />
+          <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
+        </SafeAreaView>
+      );
+    }
+
+    if (p2pScreen === 'pair') {
+      return (
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} onLayout={onLayoutRootView}>
+          <StatusBar barStyle="light-content" backgroundColor="#000" />
+          <Header title="Pair a site" t={t} onSettingsPress={() => setCurrentScreen('settings')} />
+          <PairScreen
+            wallets={wallets}
+            selectedAddress={selectedAddress}
+            nodeUrl={activeNodeUrl}
+            t={t}
+          />
           <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
         </SafeAreaView>
       );

@@ -11,3 +11,4 @@ export { default as TradeScreen } from './TradeScreen';
 export { default as MyOrdersScreen } from './MyOrdersScreen';
 export { default as ReferralScreen } from './ReferralScreen';
 export { default as ExplorerScreen } from './ExplorerScreen';
+export { default as PairScreen } from './PairScreen';

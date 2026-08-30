@@ -93,6 +93,12 @@ export default function P2PScreen({ selectedAddress, activeNodeUrl, onNavigate }
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <TouchableOpacity
             style={styles.myOrdersBtn}
+            onPress={() => onNavigate('pair')}
+          >
+            <Text style={styles.myOrdersBtnText}>Pair site</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.myOrdersBtn}
             onPress={() => onNavigate('referral')}
           >
             <Text style={styles.myOrdersBtnText}>Referrals</Text>
