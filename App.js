@@ -1113,7 +1113,11 @@ export default function DAIMinerWallet() {
         <View style={styles.card}>
           <Text style={styles.label}>AVAILABLE BALANCE</Text>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: 6 }}>
-            <Text style={styles.balance}>{currentBalance.toFixed(2)}</Text>
+            {/* 4dp, not 2: mining pays out in fractions of a DAI, and at two
+                decimals a real balance like 0.0010 rendered as "0.00" and read
+                as empty. The USD line below stays at 2dp, where cents are the
+                natural unit. */}
+            <Text style={styles.balance}>{currentBalance.toFixed(4)}</Text>
             <Text style={styles.balanceCurrency}> DAI</Text>
           </View>
           {daiUsdRate !== null && (

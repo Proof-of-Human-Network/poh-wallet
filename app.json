@@ -2,7 +2,7 @@
   "expo": {
     "name": "DAI Wallet",
     "slug": "poh-wallet",
-    "version": "0.4.4",
+    "version": "0.4.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -24,7 +24,7 @@
         "backgroundColor": "#000000"
       },
       "package": "com.dai.wallet",
-      "versionCode": 7
+      "versionCode": 8
     },
     "web": {
       "favicon": "./assets/favicon.png"
