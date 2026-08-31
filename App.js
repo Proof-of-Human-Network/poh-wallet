@@ -1007,7 +1007,7 @@ export default function DAIMinerWallet() {
       // tx but we're not sure it landed (network error → user retapped Send), reuse
       // that SAME signed tx. Rebuilding at a fresh nonce would create a second
       // transfer; resubmitting the same tx is a no-op the node reports as success.
-      const sendKey = `${selectedAddress}:${to}:${amount}`;
+      const sendKey = `${selectedAddress}:${to}:${amount}:${sendCurrency}`;
       let signedTx;
       if (pendingSendRef.current && pendingSendRef.current.key === sendKey) {
         signedTx = pendingSendRef.current.signedTx;
@@ -1373,7 +1373,7 @@ export default function DAIMinerWallet() {
         <Header title={t('receive.title')} t={t} onSettingsPress={() => setCurrentScreen('settings')} />
 
         <View style={[styles.card, { alignItems: 'center', paddingVertical: 32 }]}>
-          <Text style={styles.sectionTitle}>RECEIVE DAI</Text>
+          <Text style={styles.sectionTitle}>RECEIVE</Text>
           {selectedAddress ? (
             <View style={{ backgroundColor: '#fff', padding: 14, borderRadius: 4, marginTop: 16 }}>
               <QRCode value={selectedAddress} size={200} color="#000" backgroundColor="#fff" />

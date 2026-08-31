@@ -4,10 +4,12 @@ import {
   ActivityIndicator, ScrollView, RefreshControl,
 } from 'react-native';
 import { fetchOrders, fetchCurrencies } from '../services/p2pClient';
-import { assetMeta } from '../constants/assets';
+import { assetMeta, ONCHAIN_ASSETS } from '../constants/assets';
 
 const CURRENCIES = [
-  'All', 'USDT-ERC20', 'USDT-TRC20', 'USDT-TON', 'USDT-SOL', 'USDT-BEP20',
+  'All',
+  ...ONCHAIN_ASSETS.filter(c => c !== 'DAI'),
+  'USDT-ERC20', 'USDT-TRC20', 'USDT-TON', 'USDT-SOL', 'USDT-BEP20',
   'BTC', 'ETH', 'SOL', 'USDC-ERC20',
 ];
 
@@ -120,7 +122,9 @@ export default function P2PScreen({ selectedAddress, activeNodeUrl, onNavigate }
             style={[styles.currencyPill, currency === c && styles.currencyPillActive]}
             onPress={() => setCurrency(c)}
           >
-            <Text style={[styles.currencyPillText, currency === c && styles.currencyPillTextActive]}>{c}</Text>
+            <Text style={[styles.currencyPillText, currency === c && styles.currencyPillTextActive]}>
+              {c === 'All' ? 'All' : (ONCHAIN_ASSETS.includes(c) ? assetMeta(c).display : c)}
+            </Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
