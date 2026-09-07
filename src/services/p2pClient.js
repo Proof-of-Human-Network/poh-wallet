@@ -65,8 +65,18 @@ export async function fetchCurrencies(nodeUrl) {
 export async function createOrder(nodeUrl, { address, privateKeyHex, side, daiAmount, baseAsset, baseDecimals, quoteCurrency, pricePerDAI, minTrade, maxTrade, paymentMethods }) {
   const { signingPublicKey, secretKey } = await getSigningKeys(privateKeyHex);
   await registerSigningKey(nodeUrl, address, signingPublicKey, secretKey);
+  // Key order is load-bearing: the node rebuilds this same object and
+  // re-serialises it, and JSON.stringify preserves insertion order. The
+  // defaults ('DAI', []) must match the node's `|| 'DAI'` / `|| []` exactly or
+  // the two strings differ and every signature fails.
   const auth = await buildAuth(address, signingPublicKey, secretKey, {
-    action: 'create-order', side, daiAmount,
+    action: 'create-order',
+    side,
+    baseAsset: baseAsset || 'DAI',
+    quoteCurrency,
+    daiAmount,
+    pricePerDAI,
+    paymentMethods: paymentMethods || [],
   });
   const body = { ...auth, side, daiAmount, ...(baseAsset && baseAsset !== 'DAI' ? { baseAsset, baseDecimals } : {}), quoteCurrency, pricePerDAI, minTrade, maxTrade, paymentMethods };
   const res = await fetch(`${nodeUrl}/api/p2p/orders`, {
@@ -91,13 +101,20 @@ export async function cancelOrder(nodeUrl, { address, privateKeyHex, orderId }) 
 
 // ─── Trade actions ────────────────────────────────────────────────────────────
 
-export async function selectOrder(nodeUrl, { address, privateKeyHex, orderId, daiAmount, quoteAmount }) {
+export async function selectOrder(nodeUrl, { address, privateKeyHex, orderId, daiAmount, quoteAmount, takerPayoutAddress }) {
   const { signingPublicKey, secretKey } = await getSigningKeys(privateKeyHex);
   await registerSigningKey(nodeUrl, address, signingPublicKey, secretKey);
+  // takerPayoutAddress decides where the taker's funds land; it used to travel
+  // unsigned, so anything in the middle could redirect the payout and the
+  // signature still verified.
   const auth = await buildAuth(address, signingPublicKey, secretKey, {
-    action: 'select-order', orderId, daiAmount, quoteAmount,
+    action: 'select-order',
+    orderId,
+    daiAmount,
+    quoteAmount,
+    takerPayoutAddress: takerPayoutAddress || null,
   });
-  const body = { ...auth, daiAmount, quoteAmount };
+  const body = { ...auth, daiAmount, quoteAmount, takerPayoutAddress: takerPayoutAddress || null };
   const res = await fetch(`${nodeUrl}/api/p2p/orders/${orderId}/select`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
