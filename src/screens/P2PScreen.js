@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, FlatList,
-  ActivityIndicator, ScrollView, RefreshControl,
+  ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { fetchOrders, fetchCurrencies } from '../services/p2pClient';
 import { assetMeta, ONCHAIN_ASSETS } from '../constants/assets';
+import CurrencyPicker, { ALL, OFFCHAIN_QUOTES } from '../components/CurrencyPicker';
 
-const CURRENCIES = [
-  'All',
+// Selectable codes. 'All' is supplied by the picker itself, and the off-chain
+// rails live in CurrencyPicker so the order-creation selectors share one list.
+const CURRENCY_CODES = [
   ...ONCHAIN_ASSETS.filter(c => c !== 'DAI'),
-  'USDT-ERC20', 'USDT-TRC20', 'USDT-TON', 'USDT-SOL', 'USDT-BEP20',
-  'BTC', 'ETH', 'SOL', 'USDC-ERC20',
+  ...OFFCHAIN_QUOTES,
 ];
 
 function formatDAI(uDAI) {
@@ -32,7 +33,7 @@ function timeAgo(ts) {
 }
 
 export default function P2PScreen({ selectedAddress, activeNodeUrl, onNavigate }) {
-  const [currency, setCurrency] = useState('All');
+  const [currency, setCurrency] = useState(ALL);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -41,7 +42,7 @@ export default function P2PScreen({ selectedAddress, activeNodeUrl, onNavigate }
     if (!activeNodeUrl) return;
     if (!silent) setLoading(true);
     try {
-      const params = currency === 'All'
+      const params = currency === ALL
         ? { side: 'sell', status: 'open' }
         : { side: 'sell', quoteCurrency: currency, status: 'open' };
       const data = await fetchOrders(activeNodeUrl, params);
@@ -114,20 +115,13 @@ export default function P2PScreen({ selectedAddress, activeNodeUrl, onNavigate }
         </View>
       </View>
 
-      {/* Currency filter */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.currencyScroll}>
-        {CURRENCIES.map(c => (
-          <TouchableOpacity
-            key={c}
-            style={[styles.currencyPill, currency === c && styles.currencyPillActive]}
-            onPress={() => setCurrency(c)}
-          >
-            <Text style={[styles.currencyPillText, currency === c && styles.currencyPillTextActive]}>
-              {c === 'All' ? 'All' : (ONCHAIN_ASSETS.includes(c) ? assetMeta(c).display : c)}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      {/* Currency filter — searchable; a 153-row pill strip is undraggable. */}
+      <CurrencyPicker
+        value={currency}
+        onChange={setCurrency}
+        codes={CURRENCY_CODES}
+        label="Currency"
+      />
 
       {/* Order list */}
       {loading && !refreshing ? (
@@ -141,7 +135,7 @@ export default function P2PScreen({ selectedAddress, activeNodeUrl, onNavigate }
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#22c55e" />}
           ListEmptyComponent={
             <Text style={styles.emptyText}>
-              {currency === 'All' ? 'No open sell orders' : `No sell orders for ${currency}`}
+              {currency === ALL ? 'No open sell orders' : `No sell orders for ${currency}`}
             </Text>
           }
         />
@@ -166,12 +160,6 @@ const styles = StyleSheet.create({
   title: { color: '#fff', fontSize: 20, fontFamily: 'Iceland_400Regular', lineHeight: 29 },
   myOrdersBtn: { borderWidth: 1, borderColor: '#333', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6 },
   myOrdersBtnText: { color: '#aaa', fontSize: 15, fontFamily: 'Iceland_400Regular', lineHeight: 22 },
-
-  currencyScroll: { marginBottom: 8, flexGrow: 0 },
-  currencyPill: { borderRadius: 14, borderWidth: 1, borderColor: '#333', paddingHorizontal: 10, paddingVertical: 5, marginRight: 6 },
-  currencyPillActive: { borderColor: '#22c55e', backgroundColor: '#052e16' },
-  currencyPillText: { color: '#888', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20 },
-  currencyPillTextActive: { color: '#22c55e' },
 
   orderCard: { backgroundColor: '#111', borderRadius: 10, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#1e1e1e' },
   orderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
