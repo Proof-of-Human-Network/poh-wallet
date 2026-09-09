@@ -2,6 +2,9 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { fetchChatSuggestions, fetchHistoryMatch } from '../services/nodeClient';
 import { deriveSigningKeypair, signData, buildJobPaymentTx } from '../services/signing';
 import { STABLE_TICKERS, assetMeta } from '../constants/assets';
+import CurrencyPicker from '../components/CurrencyPicker';
+
+const FEE_CURRENCY_CODES = ['DAI', ...STABLE_TICKERS];
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView,
   ActivityIndicator, StyleSheet, Alert, PanResponder,
@@ -746,23 +749,15 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
               <Text style={s.label}>MAX FEE <Text style={s.labelNote}>(data skills only)</Text></Text>
               <Text style={s.feeValue}>{feeCurrency === 'DAI' ? _fmtDai(budget) : `${budget.toFixed(2)} ${assetMeta(feeCurrency).display}`}</Text>
             </View>
-            {/* Fee currency chips — the miner receives exactly this currency */}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
-              {['DAI', ...STABLE_TICKERS].map(tk => (
-                <TouchableOpacity
-                  key={tk}
-                  onPress={() => { setFeeCurrency(tk); if (tk !== 'DAI' && budget < 0.01) setBudget(0.01); }}
-                  style={{
-                    paddingVertical: 3, paddingHorizontal: 9, borderRadius: 11, borderWidth: 1,
-                    borderColor: feeCurrency === tk ? '#22c55e' : '#1f2937',
-                    backgroundColor: feeCurrency === tk ? '#052e16' : 'transparent',
-                  }}>
-                  <Text style={{ color: feeCurrency === tk ? '#22c55e' : '#6b7280', fontSize: 10 }}>
-                    {assetMeta(tk).display}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {/* Fee currency — the miner receives exactly this currency. A
+                wrapped chip grid was fine at 15; at 156 it buries the slider. */}
+            <CurrencyPicker
+              value={feeCurrency}
+              onChange={tk => { setFeeCurrency(tk); if (tk !== 'DAI' && budget < 0.01) setBudget(0.01); }}
+              codes={FEE_CURRENCY_CODES}
+              includeAll={false}
+              label="Paid in"
+            />
             <LogSlider value={budget} onChange={setBudget} disabled={loading} />
             <View style={s.presetRow}>
               {FEE_PRESETS.map(p => {

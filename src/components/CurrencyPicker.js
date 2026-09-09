@@ -33,10 +33,13 @@ export const OFFCHAIN_QUOTES = [
  * One row per selectable currency, with its search haystack precomputed.
  * Module-level: this is stable for the life of the app.
  */
-function buildRows(codes) {
+function buildRows(codes, markCodes = null) {
+  const mark = markCodes ? new Set(markCodes) : null;
   return codes.map(code => {
     const a = ASSETS[code];
-    const title = a?.display || code;
+    // ⚡ flags an on-chain quote: those swaps settle atomically, with no
+    // off-chain payment step, which changes what the order means.
+    const title = (a?.display || code) + (mark?.has(code) ? ' ⚡' : '');
     const subtitle = a ? [a.name, a.country].filter(Boolean).join(' · ') : 'Payment method';
     return {
       code,
@@ -57,16 +60,21 @@ export default function CurrencyPicker({
   value,
   onChange,
   codes = null,
+  markCodes = null,
   includeAll = true,
   allLabel = 'All currencies',
   label = null,
+  placeholder = 'Select',
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const listRef = useRef(null);
 
-  const rows = useMemo(() => (codes ? buildRows(codes) : DEFAULT_ROWS), [codes]);
+  const rows = useMemo(
+    () => (codes ? buildRows(codes, markCodes) : DEFAULT_ROWS),
+    [codes, markCodes],
+  );
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query.trim().toLowerCase()), DEBOUNCE_MS);
@@ -90,9 +98,9 @@ export default function CurrencyPicker({
   const close = useCallback(() => { setOpen(false); setQuery(''); setDebounced(''); }, []);
   const pick = useCallback(code => { onChange?.(code); close(); }, [onChange, close]);
 
-  const selected = value === ALL || !value
+  const selected = value === ALL
     ? allLabel
-    : (ASSETS[value]?.display || value);
+    : (!value ? placeholder : (ASSETS[value]?.display || value));
 
   const getItemLayout = useCallback(
     (_, index) => ({ length: ROW_H, offset: ROW_H * index, index }),

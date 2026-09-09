@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
   ScrollView, Alert, ActivityIndicator,
 } from 'react-native';
 import { createOrder, applyReferralCode } from '../services/p2pClient';
 import { STABLE_TICKERS, assetMeta } from '../constants/assets';
+import CurrencyPicker from '../components/CurrencyPicker';
 
 const DAI_DECIMALS = 1_000_000_000;
 
@@ -37,6 +38,19 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
   const side = 'sell';
   const [baseAsset, setBaseAsset] = useState('DAI');
   const [quoteCurrency, setQuoteCurrency] = useState('USDT-ERC20');
+  // A pair cannot quote itself, so the base is excluded from the quote list.
+  const QUOTE_CODES = useMemo(
+    () => [...ONCHAIN.filter(c => c !== baseAsset), ...CURRENCIES],
+    [baseAsset],
+  );
+  // Selecting a base that was already the quote would leave a self-quoting
+  // pair the node rejects. The old pill strip hid the row but kept the stale
+  // selection; with 155 options this is easy to hit, so move the quote off it.
+  useEffect(() => {
+    if (quoteCurrency === baseAsset) {
+      setQuoteCurrency(QUOTE_CODES[0] || 'USDT-ERC20');
+    }
+  }, [baseAsset, quoteCurrency, QUOTE_CODES]);
   // On-chain quote → atomic swap (settles instantly, no payment methods needed)
   const atomic = ONCHAIN.includes(quoteCurrency);
   const [daiAmount, setDAIAmount] = useState('');
@@ -149,17 +163,12 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
       {/* Sell asset (base) */}
       <View style={styles.section}>
         <Text style={styles.label}>Sell Asset</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {ONCHAIN.map(a => (
-            <TouchableOpacity
-              key={a}
-              style={[styles.currencyPill, baseAsset === a && styles.currencyPillActive]}
-              onPress={() => setBaseAsset(a)}
-            >
-              <Text style={[styles.currencyPillText, baseAsset === a && styles.currencyPillTextActive]}>{assetMeta(a).display}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        <CurrencyPicker
+          value={baseAsset}
+          onChange={setBaseAsset}
+          codes={ONCHAIN}
+          includeAll={false}
+        />
       </View>
 
       {/* Amount */}
@@ -178,19 +187,13 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
       {/* Quote currency */}
       <View style={styles.section}>
         <Text style={styles.label}>Paid in</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {[...ONCHAIN.filter(c => c !== baseAsset), ...CURRENCIES].map(c => (
-            <TouchableOpacity
-              key={c}
-              style={[styles.currencyPill, quoteCurrency === c && styles.currencyPillActive]}
-              onPress={() => setQuoteCurrency(c)}
-            >
-              <Text style={[styles.currencyPillText, quoteCurrency === c && styles.currencyPillTextActive]}>
-                {ONCHAIN.includes(c) ? `${assetMeta(c).display} ⚡` : c}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        <CurrencyPicker
+          value={quoteCurrency}
+          onChange={setQuoteCurrency}
+          codes={QUOTE_CODES}
+          markCodes={ONCHAIN}
+          includeAll={false}
+        />
         {atomic && <Text style={[styles.hint, { marginTop: 6 }]}>⚡ On-chain payment — the swap settles instantly to both wallets, no payment methods needed.</Text>}
       </View>
 
