@@ -174,6 +174,12 @@ export const ASSETS = {
   aiYER:   { ticker: 'aiYER', decimals: 2, display: 'αιYER', sign: 'ر.ي.‏', iso: 'YER', name: 'Yemeni Rial', country: 'Yemen' },
   aiZAR:   { ticker: 'aiZAR', decimals: 2, display: 'αιZAR', sign: 'R', iso: 'ZAR', name: 'South African Rand', country: 'Lesotho, Namibia, South Africa' },
   aiZMW:   { ticker: 'aiZMW', decimals: 2, display: 'αιZMW', sign: 'K', iso: 'ZMW', name: 'Zambian Kwacha', country: 'Zambia' },
+  aiPRB:   { ticker: 'aiPRB', decimals: 2, display: 'αιPRB', sign: 'р.', iso: 'PRB', name: 'Transnistrian Ruble', country: 'Transnistria' },
+  aiSLS:   { ticker: 'aiSLS', decimals: 2, display: 'αιSLS', sign: 'Sl', iso: 'SLS', name: 'Somaliland Shilling', country: 'Somaliland' },
+  aiAPS:   { ticker: 'aiAPS', decimals: 2, display: 'αιAPS', sign: 'ა', iso: 'APS', name: 'Abkhazian Apsar', country: 'Abkhazia' },
+  aiKID:   { ticker: 'aiKID', decimals: 2, display: 'αιKID', sign: '$', iso: 'KID', name: 'Kiribati Dollar', country: 'Kiribati' },
+  aiTVD:   { ticker: 'aiTVD', decimals: 2, display: 'αιTVD', sign: '$', iso: 'TVD', name: 'Tuvaluan Dollar', country: 'Tuvalu' },
+  aiFOK:   { ticker: 'aiFOK', decimals: 2, display: 'αιFOK', sign: 'kr', iso: 'FOK', name: 'Faroese Króna', country: 'Faroe Islands' },
 };
 
 export const STABLE_TICKERS = Object.keys(ASSETS).filter(t => t !== 'DAI');
