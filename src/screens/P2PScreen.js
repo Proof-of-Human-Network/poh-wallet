@@ -94,12 +94,10 @@ export default function P2PScreen({ selectedAddress, activeNodeUrl, onNavigate }
       <View style={styles.header}>
         <Text style={styles.title}>P2P Exchange</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity
-            style={styles.myOrdersBtn}
-            onPress={() => onNavigate('pair')}
-          >
-            <Text style={styles.myOrdersBtnText}>Pair site</Text>
-          </TouchableOpacity>
+          {/* Site pairing is hidden for now. This button was the only way in --
+              there is no deep-link handler -- so removing it takes the whole
+              flow out of reach. PairScreen and the 'pair' route are left
+              intact, so restoring it is putting this back. */}
           <TouchableOpacity
             style={styles.myOrdersBtn}
             onPress={() => onNavigate('referral')}
