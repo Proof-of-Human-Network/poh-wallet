@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TextInput, Alert, TouchableOpacity,
   FlatList, ActivityIndicator, SafeAreaView, StatusBar, ScrollView, Platform, Modal
@@ -28,6 +28,8 @@ import {
   buildSignedTransaction,
 } from './src/services/signing';
 import { ASSETS as CHAIN_ASSETS, STABLE_TICKERS, assetMeta } from './src/constants/assets';
+import CurrencyPicker from './src/components/CurrencyPicker';
+import AssetBalanceList from './src/components/AssetBalanceList';
 import {
   selectBestNode,
   discoverPeers,
@@ -136,6 +138,13 @@ export default function DAIMinerWallet() {
   const [balances, setBalances] = useState({}); // address -> number (DAI display units)
   const [assetBalances, setAssetBalances] = useState({}); // address -> { ticker: displayNumber } (stablecoins)
   const [sendCurrency, setSendCurrency] = useState('DAI'); // asset picked in the Send screen
+  // You can only send what you hold, so the picker lists exactly that — DAI
+  // plus every stablecoin with a non-zero balance. Recomputed when the balance
+  // map or the selected wallet changes.
+  const sendableAssets = useMemo(
+    () => ['DAI', ...STABLE_TICKERS.filter(tk => ((assetBalances[selectedAddress] || {})[tk] || 0) > 0)],
+    [assetBalances, selectedAddress],
+  );
   const [txs, setTxs] = useState([]);
   const [localPendingTxs, setLocalPendingTxs] = useState([]);
 
@@ -1123,15 +1132,9 @@ export default function DAIMinerWallet() {
           {daiUsdRate !== null && (
             <Text style={styles.usd}>≈ ${(currentBalance * daiUsdRate).toFixed(2)} USD</Text>
           )}
-          {/* Stablecoin holdings — one row per non-zero asset */}
-          {Object.entries(assetBalances[selectedAddress] || {}).filter(([, v]) => v > 0).map(([tk, v]) => (
-            <View key={tk} style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-              <Text style={{ color: '#9ca3af', fontSize: 13 }}>{assetMeta(tk).display}</Text>
-              <Text style={{ color: '#e5e7eb', fontSize: 13 }}>
-                {v.toFixed(2)} {assetMeta(tk).sign}
-              </Text>
-            </View>
-          ))}
+          {/* Stablecoin holdings — same two-line rows as the currency picker,
+              so a ticker you do not recognise still tells you what it is. */}
+          <AssetBalanceList balances={assetBalances[selectedAddress] || {}} />
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
             {loading && <ActivityIndicator color="#22c55e" size="small" style={{ marginRight: 8 }} />}
             <TouchableOpacity onPress={copyAddress} style={{ flex: 1 }}>
@@ -1270,22 +1273,17 @@ export default function DAIMinerWallet() {
             </Text>
           </View>
 
-          {/* Asset picker — DAI + any stablecoins this wallet holds */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
-            {['DAI', ...STABLE_TICKERS.filter(tk => ((assetBalances[selectedAddress] || {})[tk] || 0) > 0)].map(tk => (
-              <TouchableOpacity
-                key={tk}
-                onPress={() => setSendCurrency(tk)}
-                style={{
-                  paddingVertical: 4, paddingHorizontal: 10, borderRadius: 12, borderWidth: 1,
-                  borderColor: sendCurrency === tk ? '#22c55e' : '#1f2937',
-                  backgroundColor: sendCurrency === tk ? '#052e16' : 'transparent',
-                }}>
-                <Text style={{ color: sendCurrency === tk ? '#22c55e' : '#6b7280', fontSize: 11 }}>
-                  {assetMeta(tk).display}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          {/* Asset picker — DAI plus whatever this wallet actually holds. Same
+              control as the P2P filter: at 161 currencies a chip row is not a
+              picker, and searching by name beats hunting for a greek ticker. */}
+          <View style={{ marginTop: 10 }}>
+            <CurrencyPicker
+              value={sendCurrency}
+              onChange={setSendCurrency}
+              codes={sendableAssets}
+              includeAll={false}
+              label="Send"
+            />
           </View>
 
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
