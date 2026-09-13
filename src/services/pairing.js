@@ -34,6 +34,28 @@ export const ACTION_ALLOWLIST = new Set([
   'create-order', 'cancel-order', 'apply-referral',
 ]);
 
+/** Only these keys are copied into the signed payload for each action. */
+const ACTION_FIELDS = {
+  'select-order': ['orderId', 'daiAmount', 'quoteAmount', 'takerPayoutAddress'],
+  'payment-sent': ['tradeId'],
+  'release': ['tradeId'],
+  'cancel': ['tradeId'],
+  'dispute': ['tradeId', 'reason'],
+  'create-order': ['side', 'baseAsset', 'quoteCurrency', 'daiAmount', 'pricePerDAI', 'paymentMethods', 'minTrade', 'maxTrade', 'baseDecimals'],
+  'cancel-order': ['orderId'],
+  'apply-referral': ['code'],
+};
+
+function pickSignedFields(action, fields) {
+  const allow = ACTION_FIELDS[action] || [];
+  const src = fields && typeof fields === 'object' ? fields : {};
+  const out = {};
+  for (const k of allow) {
+    if (src[k] !== undefined) out[k] = src[k];
+  }
+  return out;
+}
+
 const b64 = {
   enc: (u8) => global.btoa(String.fromCharCode.apply(null, Array.from(u8))),
   dec: (s) => Uint8Array.from(global.atob(s), (c) => c.charCodeAt(0)),
@@ -65,7 +87,9 @@ export function parsePairingUri(uri) {
   }
   if (Number(q.v || 1) !== PROTOCOL) throw new Error('unsupported-version');
   if (!/^[0-9a-f]{64}$/.test(q.topic || '')) throw new Error('bad-topic');
-  if (!/^https?:\/\//.test(q.relay || '')) throw new Error('bad-relay');
+  const relay = q.relay || '';
+  const localHttp = /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/i.test(relay);
+  if (!/^https:\/\//i.test(relay) && !localHttp) throw new Error('bad-relay');
   let browserKey;
   try {
     browserKey = b64.dec(q.k || '');
@@ -194,7 +218,7 @@ export class PairSession {
     const { signingPublicKey, secretKey } = await this._signingKeys();
     const timestamp = Date.now();
     const payload = JSON.stringify({
-      address: this.address, timestamp, action: req.action, ...(req.fields || {}),
+      address: this.address, timestamp, action: req.action, ...pickSignedFields(req.action, req.fields),
     });
     return this._publish({
       t: 'signed',
@@ -246,6 +270,7 @@ export function describeRequest(req, address) {
   if (f.tradeId) rows.push(['Trade', String(f.tradeId).slice(0, 8)]);
   if (f.daiAmount != null) rows.push(['Amount', String(f.daiAmount)]);
   if (f.quoteAmount != null) rows.push(['You pay', String(f.quoteAmount)]);
+  if (f.takerPayoutAddress) rows.push(['Payout', String(f.takerPayoutAddress)]);
   if (f.side) rows.push(['Side', String(f.side)]);
   if (f.code) rows.push(['Code', String(f.code)]);
   rows.push(['Signing as', address]);

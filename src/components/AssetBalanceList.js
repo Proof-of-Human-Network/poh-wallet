@@ -60,7 +60,21 @@ export function pageOf(rows, page, perPage = PER_PAGE) {
   return { pages, safePage, from, slice: rows.slice(from, from + perPage) };
 }
 
-export default function AssetBalanceList({ balances = {}, onPressAsset = null, emptyLabel = null }) {
+function formatConverted(value, currency) {
+  try {
+    return value.toLocaleString(undefined, { style: 'currency', currency, maximumFractionDigits: 2 });
+  } catch {
+    return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${currency}`;
+  }
+}
+
+export default function AssetBalanceList({
+  balances = {},
+  onPressAsset = null,
+  emptyLabel = null,
+  converted = null,
+  displayCurrency = 'USD',
+}) {
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [page, setPage] = useState(0);
@@ -105,6 +119,7 @@ export default function AssetBalanceList({ balances = {}, onPressAsset = null, e
 
       {slice.map(r => {
         const Row = onPressAsset ? TouchableOpacity : View;
+        const conv = converted && converted[r.ticker];
         return (
           <Row
             key={r.ticker}
@@ -115,10 +130,15 @@ export default function AssetBalanceList({ balances = {}, onPressAsset = null, e
               <Text style={s.ticker} numberOfLines={1}>{r.meta.display}</Text>
               {r.sub ? <Text style={s.sub} numberOfLines={1}>{r.sub}</Text> : null}
             </View>
-            <View style={s.right}>
-              <Text style={s.amount} numberOfLines={1}>{formatAmount(r.value, r.meta.decimals)}</Text>
-              {/* RTL signs (ع.د, ل.د, ﷼) must not reorder the amount beside them. */}
-              {r.meta.sign ? <Text style={s.sign} numberOfLines={1}>{r.meta.sign}</Text> : null}
+            <View style={s.rightCol}>
+              {conv > 0 ? (
+                <Text style={s.converted} numberOfLines={1}>{formatConverted(conv, displayCurrency)}</Text>
+              ) : null}
+              <View style={s.right}>
+                <Text style={s.amount} numberOfLines={1}>{formatAmount(r.value, r.meta.decimals)}</Text>
+                {/* RTL signs (ع.د, ل.د, ﷼) must not reorder the amount beside them. */}
+                {r.meta.sign ? <Text style={s.sign} numberOfLines={1}>{r.meta.sign}</Text> : null}
+              </View>
             </View>
           </Row>
         );
@@ -160,13 +180,15 @@ const s = StyleSheet.create({
   },
   row: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: '#141414',
+    paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#141414',
   },
   left: { flex: 1, paddingRight: 10 },
   ticker: { color: '#e5e7eb', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 18 },
   sub: { color: '#6b7280', fontSize: 11, fontFamily: 'Iceland_400Regular', writingDirection: 'ltr' },
+  rightCol: { alignItems: 'flex-end' },
+  converted: { color: '#fff', fontSize: 18, fontFamily: 'Iceland_400Regular', fontVariant: ['tabular-nums'], lineHeight: 24 },
   right: { flexDirection: 'row', alignItems: 'baseline', gap: 5 },
-  amount: { color: '#e5e7eb', fontSize: 14, fontFamily: 'Iceland_400Regular', fontVariant: ['tabular-nums'] },
+  amount: { color: '#9ca3af', fontSize: 12, fontFamily: 'Iceland_400Regular', fontVariant: ['tabular-nums'] },
   sign: { color: '#6b7280', fontSize: 12, fontFamily: 'Iceland_400Regular', writingDirection: 'ltr', minWidth: 26 },
   empty: { color: '#4b5563', fontSize: 12, fontFamily: 'Iceland_400Regular', marginTop: 8 },
   pager: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },

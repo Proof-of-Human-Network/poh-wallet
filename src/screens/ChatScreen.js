@@ -420,6 +420,21 @@ export default function ChatScreen({ activeNodeUrl, nodes = [], selectedAddress,
       if (!selectedAddress) { pushMsg({ role: 'ai', error: true, text: 'Select a wallet to pay the skill fee.' }); return; }
       if (feeCurrency === 'DAI' && budget > balance) { pushMsg({ role: 'ai', error: true, text: `Insufficient balance: ${balance.toFixed(2)} DAI available.` }); return; }
 
+      const payOk = await new Promise((resolve) => {
+        Alert.alert(
+          'Pay skill fee',
+          `Pay ${budget} ${feeCurrency} to this miner to run ${askData.skillId || 'this skill'}?`,
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+            { text: 'Pay', onPress: () => resolve(true) },
+          ],
+        );
+      });
+      if (!payOk) {
+        pushMsg({ role: 'ai', type: 'chat', text: 'Skill fee declined.' });
+        return;
+      }
+
       // Fee-required job types need a signed payment proof (paymentTx) bound to
       // jobId + miner + amount + nonce — the node rejects them with 402 otherwise.
       setStatusText('Signing fee payment...');

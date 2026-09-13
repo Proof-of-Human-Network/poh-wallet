@@ -125,3 +125,11 @@ export async function loadLanguage() {
 export async function saveLanguage(lang) {
   if (lang) await saveString(STORAGE_KEYS.LANG, lang);
 }
+
+export async function loadDisplayCurrency() {
+  return loadString(STORAGE_KEYS.DISPLAY_CURRENCY);
+}
+
+export async function saveDisplayCurrency(code) {
+  if (code) await saveString(STORAGE_KEYS.DISPLAY_CURRENCY, code);
+}

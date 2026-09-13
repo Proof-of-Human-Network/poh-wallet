@@ -220,3 +220,23 @@ export async function fetchHistoryMatch(nodeUrl, { q, wallet, minScore = 0.82 } 
     return null;
   }
 }
+
+/**
+ * What one unit of DAI and of every stablecoin is worth in `currency`.
+ * The node owns the resolution (P2P first, forex second, silence if no
+ * DAI/USD market) so desktop and phone cannot disagree.
+ */
+export async function fetchDisplayRates(nodeUrl, currency) {
+  if (!nodeUrl) return { unavailable: true, reason: 'no-node', currency };
+  const base = nodeUrl.replace(/\/$/, '');
+  const cur = encodeURIComponent(currency || 'USD');
+  try {
+    const res = await fetch(`${base}/api/rates/display?currency=${cur}`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return { unavailable: true, reason: 'http', currency };
+    return await res.json();
+  } catch (e) {
+    return { unavailable: true, reason: 'error', message: e.message, currency };
+  }
+}

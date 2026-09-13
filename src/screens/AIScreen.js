@@ -316,7 +316,7 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
     if (p === 'github')                return `https://github.com/${id}`;
     if (p === 'telegram')              return `https://t.me/${id}`;
     if (p === 'discord')               return null;
-    if (identity?.startsWith('http'))  return identity;
+    if (identity?.startsWith('https://')) return identity;
     return null;
   }
   function renderBadge(b, label, okColor = '#22c55e') {
@@ -464,7 +464,7 @@ export default function AIScreen({ t, wallets = [], selectedAddress, balances = 
                 const url = l.url || socialUrl(l.platform, l.identity);
                 const chip = <Text style={styles.socialChip}>{platformIcon(l.platform)} {l.displayName || l.identity}</Text>;
                 return url
-                  ? <TouchableOpacity key={i} onPress={() => Linking.openURL(url)}>{chip}</TouchableOpacity>
+                  ? <TouchableOpacity key={i} onPress={() => { if (/^https:\/\//i.test(url)) Linking.openURL(url); }}>{chip}</TouchableOpacity>
                   : <View key={i}>{chip}</View>;
               })}
             </View>

@@ -6,6 +6,7 @@ export const STORAGE_KEYS = {
   ACTIVE_NODE_URL: 'dai_active_node_url_v1',
   LOCAL_TXS: 'dai_local_txs_v2',
   LANG: 'dai_lang_v1',
+  DISPLAY_CURRENCY: 'dai_display_currency_v1',
   NODE_URL: 'dai_node_url_v1', // legacy (pre multi-node support)
 };
 

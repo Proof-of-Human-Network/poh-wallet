@@ -33,6 +33,7 @@ import AssetBalanceList from './src/components/AssetBalanceList';
 import {
   selectBestNode,
   discoverPeers,
+  fetchDisplayRates,
 } from './src/services/nodeClient';
 import * as Storage from './src/services/storage';
 
@@ -150,14 +151,19 @@ export default function DAIMinerWallet() {
 
   const [sendTo, setSendTo] = useState('');
   const [sendAmount, setSendAmount] = useState('');
-  const [importKey, setImportKey] = useState(''); // reused for "add node" input in Settings
+  const [importKey, setImportKey] = useState('');
+  const [nodeUrlInput, setNodeUrlInput] = useState('');
 
   const [nodes, setNodes] = useState([]);
   const [activeNodeUrl, setActiveNodeUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [lastSync, setLastSync] = useState(null);
   const [language, setLanguage] = useState('en');
-  const [settingsTab, setSettingsTab] = useState('nodes'); // 'nodes' | 'language' | 'danger'
+  const [settingsTab, setSettingsTab] = useState('menu'); // 'menu' | 'nodes' | 'language' | 'display' | 'wallets' | 'danger'
+  const [displayCurrency, setDisplayCurrency] = useState('USD');
+  const [displayRates, setDisplayRates] = useState(null); // { perUnit } | { unavailable }
+  const [assetAction, setAssetAction] = useState(null); // ticker of the holding the sheet is for
+  const [p2pFilter, setP2pFilter] = useState(null); // quote currency to preselect on the P2P book
   const [sendQrVisible, setSendQrVisible] = useState(false);
   const [sendCamPermission, requestSendCamPermission] = useCameraPermissions();
 
@@ -167,16 +173,50 @@ export default function DAIMinerWallet() {
   // resubmits the SAME tx (idempotent at the node) instead of rebuilding at the
   // next nonce, which would silently send twice. Cleared on a confirmed submit.
   const pendingSendRef = useRef(null); // { key, signedTx }
-  const [daiUsdRate, setDaiUsdRate] = useState(null);
+  const displayCurrencyOptions = useMemo(() => {
+    const seen = new Set(['USD']);
+    const rows = [{ code: 'USD', label: 'USD — US Dollar' }];
+    for (const a of Object.values(CHAIN_ASSETS)) {
+      if (!a.iso || seen.has(a.iso)) continue;
+      seen.add(a.iso);
+      rows.push({ code: a.iso, label: `${a.iso} — ${a.name || a.display}` });
+    }
+    rows.sort((x, y) => (x.code === 'USD' ? -1 : y.code === 'USD' ? 1 : x.code.localeCompare(y.code)));
+    return rows;
+  }, []);
+
+  function formatDisplayAmount(value) {
+    try {
+      return value.toLocaleString(undefined, { style: 'currency', currency: displayCurrency, maximumFractionDigits: 2 });
+    } catch {
+      return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${displayCurrency}`;
+    }
+  }
 
   // Refs to avoid stale closures in async node-calling functions
   const activeNodeUrlRef = useRef(activeNodeUrl);
   const nodesRef = useRef(nodes);
+  const displayCurrencyRef = useRef(displayCurrency);
   useEffect(() => { activeNodeUrlRef.current = activeNodeUrl; }, [activeNodeUrl]);
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  useEffect(() => { displayCurrencyRef.current = displayCurrency; }, [displayCurrency]);
 
   const selectedWallet = wallets.find(w => w.address === selectedAddress) || wallets[0] || null;
   const currentBalance = selectedAddress ? (balances[selectedAddress] || 0) : 0;
+  const convertedBalances = useMemo(() => {
+    const rates = displayRates;
+    const held = assetBalances[selectedAddress] || {};
+    if (!rates || rates.unavailable || !rates.perUnit) return null;
+    const out = {};
+    for (const [t, n] of Object.entries(held)) {
+      const per = rates.perUnit[t];
+      if (per > 0 && Number(n) > 0) out[t] = Number(n) * per;
+    }
+    return out;
+  }, [displayRates, assetBalances, selectedAddress]);
+  const daiConverted = (displayRates && !displayRates.unavailable && displayRates.perUnit?.DAI > 0 && currentBalance > 0)
+    ? currentBalance * displayRates.perUnit.DAI
+    : null;
 
   // Live translator (recomputed on language change => all strings update)
   const t = createTranslator(language);
@@ -246,7 +286,7 @@ export default function DAIMinerWallet() {
         const discovered = await discoverPeers();
         if (discovered && discovered.length > 0) {
           const existingUrls = new Set(loadedNodes.map(n => n.url));
-          const fresh = discovered.filter(d => d.url && !existingUrls.has(d.url));
+          const fresh = discovered.filter(d => d.url && !existingUrls.has(d.url) && /^https:/i.test(d.url));
           if (fresh.length > 0) {
             loadedNodes = [...loadedNodes, ...fresh];
             await Storage.saveNodes(loadedNodes);
@@ -277,6 +317,9 @@ export default function DAIMinerWallet() {
         setLanguage(detected);
         await Storage.saveLanguage(detected);
       }
+
+      const loadedCcy = await Storage.loadDisplayCurrency();
+      if (loadedCcy) setDisplayCurrency(loadedCcy);
     } catch (e) {
       console.log('Load persisted error', e);
     }
@@ -353,7 +396,14 @@ export default function DAIMinerWallet() {
     const tried = new Set();
     const MAX_ATTEMPTS = 6;
 
+    const method = String(options.method || 'GET').toUpperCase();
+    const mutating = method !== 'GET' && method !== 'HEAD';
+
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      // Signed sends / P2P / jobs must not silently move to a discovered HTTP peer.
+      if (mutating && attempt > 0) {
+        throw new Error('Active node unreachable');
+      }
       const currentActive = activeNodeUrlRef.current;
       const currentNodes = nodesRef.current || nodes;
       // Pick next candidate: active node first (on first try), then untried peers by latency
@@ -371,7 +421,7 @@ export default function DAIMinerWallet() {
           if (discovered.length) {
             const currNodes = nodesRef.current || nodes;
             const currentUrls = new Set(currNodes.map(n => n.url));
-            const fresh = discovered.filter(d => d.url && !currentUrls.has(d.url) && !tried.has(d.url));
+            const fresh = discovered.filter(d => d.url && !currentUrls.has(d.url) && !tried.has(d.url) && /^https:/i.test(d.url));
             if (fresh.length) {
               const updated = [...currNodes, ...fresh];
               setNodes(updated);
@@ -487,26 +537,17 @@ export default function DAIMinerWallet() {
     }
   }
 
-  async function fetchBestDAIRate() {
+  async function refreshDisplayRatesForUi() {
     const node = activeNodeUrlRef.current || activeNodeUrl;
-    if (!node) return;
-    try {
-      let bestRate = null;
-      for (const cur of ['USDT-ERC20', 'USDC-ERC20', 'USDT-TRC20']) {
-        const res = await fetch(`${node.replace(/\/$/, '')}/api/p2p/orders?side=sell&quoteCurrency=${cur}&status=open`);
-        if (!res.ok) continue;
-        const data = await res.json();
-        const orders = data.orders || [];
-        for (const o of orders) {
-          if (o.pricePerDAI > 0 && (bestRate === null || o.pricePerDAI < bestRate)) {
-            bestRate = o.pricePerDAI;
-          }
-        }
-      }
-      // Always update: set to null if no orders so the USD line hides
-      setDaiUsdRate(bestRate);
-    } catch { /* network error — leave rate as-is */ }
+    if (!node) { setDisplayRates({ unavailable: true, reason: 'no-node' }); return; }
+    const rates = await fetchDisplayRates(node, displayCurrencyRef.current);
+    setDisplayRates(rates);
   }
+
+  const changeDisplayCurrency = async (code) => {
+    setDisplayCurrency(code);
+    await Storage.saveDisplayCurrency(code);
+  };
 
   // Discover fresh peers from bootnodes (miner.iamai.kg/peers first, then fallbacks)
   // Adds new nodes to the list and may switch to the best one.
@@ -518,15 +559,15 @@ export default function DAIMinerWallet() {
       const currActive = activeNodeUrlRef.current || activeNodeUrl;
       if (discovered.length > 0) {
         const currentUrls = new Set(currNodes.map(n => n.url));
-        const toAdd = discovered.filter(d => d.url && !currentUrls.has(d.url));
+        const toAdd = discovered.filter(d => d.url && !currentUrls.has(d.url) && /^https:/i.test(d.url));
         if (toAdd.length > 0) {
           const updated = [...currNodes, ...toAdd];
           setNodes(updated);
           await Storage.saveNodes(updated);
 
-          // Re-evaluate best node including newly discovered peers
-          const best = await selectBestNode(updated);
-          if (best && best.url !== currActive) {
+          // Do not auto-switch the active node to a just-discovered peer.
+          const best = await selectBestNode(updated.filter(n => currentUrls.has(n.url) || n.url === currActive));
+          if (best && best.url !== currActive && currentUrls.has(best.url)) {
             setActiveNodeUrl(best.url);
             await Storage.saveActiveNodeUrl(best.url);
           }
@@ -566,7 +607,7 @@ export default function DAIMinerWallet() {
     await Promise.all([
       fetchBalance(selectedAddress, silent),
       fetchTransactions(selectedAddress),
-      fetchBestDAIRate(),
+      refreshDisplayRatesForUi(),
     ]);
   }
 
@@ -585,7 +626,7 @@ export default function DAIMinerWallet() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [currentScreen, selectedAddress, activeNodeUrl]);
+  }, [currentScreen, selectedAddress, activeNodeUrl, displayCurrency]);
 
   // Initial load + notification permission + push token registration
   useEffect(() => {
@@ -661,8 +702,13 @@ export default function DAIMinerWallet() {
   const onLayoutRootView = useCallback(() => {}, []);
 
   const handleTabPress = (key) => {
-    if (key === 'p2p') { setP2pScreen('p2p'); setP2pParams({}); }
+    if (key === 'p2p') { setP2pScreen('p2p'); setP2pParams({}); setP2pFilter(null); }
     setCurrentScreen(key);
+  };
+
+  const openSettings = () => {
+    setSettingsTab('menu');
+    setCurrentScreen('settings');
   };
 
   if (!fontsLoaded) {
@@ -906,8 +952,8 @@ export default function DAIMinerWallet() {
   };
 
   const importWallet = async () => {
-    const key = importKey.trim();
-    if (!key || key.length < 32) {
+    const key = importKey.trim().toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(key)) {
       const msg = t('import.error_invalid');
       if (Platform.OS === 'web') {
         alert(msg);
@@ -975,6 +1021,10 @@ export default function DAIMinerWallet() {
       Alert.alert(t('error'), t('send.error_invalid'));
       return;
     }
+    if (!/^dai[0-9a-f]{40}$/i.test(to)) {
+      Alert.alert(t('error'), 'Destination must be a DAI address (dai… 43 characters).');
+      return;
+    }
     if (!selectedAddress) {
       Alert.alert(t('send.no_wallet'));
       return;
@@ -987,6 +1037,18 @@ export default function DAIMinerWallet() {
       Alert.alert(t('error'), t('send.insufficient'));
       return;
     }
+
+    const confirmed = await new Promise((resolve) => {
+      Alert.alert(
+        'Confirm send',
+        `Send ${amount} ${sendCurrency}\n\nto\n${to}`,
+        [
+          { text: t('alert.cancel') || 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+          { text: t('send.confirm') || 'Send', style: 'destructive', onPress: () => resolve(true) },
+        ],
+      );
+    });
+    if (!confirmed) return;
 
     setLoading(true);
     try {
@@ -1116,7 +1178,7 @@ export default function DAIMinerWallet() {
     return (
       <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
         <StatusBar barStyle="light-content" />
-        <Header t={t} onSettingsPress={() => setCurrentScreen('settings')} />
+        <Header t={t} onSettingsPress={openSettings} />
 
         {/* Balance card */}
         <View style={styles.card}>
@@ -1129,12 +1191,17 @@ export default function DAIMinerWallet() {
             <Text style={styles.balance}>{currentBalance.toFixed(4)}</Text>
             <Text style={styles.balanceCurrency}> DAI</Text>
           </View>
-          {daiUsdRate !== null && (
-            <Text style={styles.usd}>≈ ${(currentBalance * daiUsdRate).toFixed(2)} USD</Text>
+          {daiConverted != null && (
+            <Text style={styles.usd}>≈ {formatDisplayAmount(daiConverted)}</Text>
           )}
           {/* Stablecoin holdings — same two-line rows as the currency picker,
               so a ticker you do not recognise still tells you what it is. */}
-          <AssetBalanceList balances={assetBalances[selectedAddress] || {}} />
+          <AssetBalanceList
+            balances={assetBalances[selectedAddress] || {}}
+            converted={convertedBalances}
+            displayCurrency={displayCurrency}
+            onPressAsset={(ticker) => setAssetAction(ticker)}
+          />
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
             {loading && <ActivityIndicator color="#22c55e" size="small" style={{ marginRight: 8 }} />}
             <TouchableOpacity onPress={copyAddress} style={{ flex: 1 }}>
@@ -1212,6 +1279,44 @@ export default function DAIMinerWallet() {
         </View>
 
         <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
+
+        <Modal visible={!!assetAction} transparent animationType="fade" onRequestClose={() => setAssetAction(null)}>
+          <TouchableOpacity
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.82)', justifyContent: 'center', alignItems: 'center' }}
+            activeOpacity={1}
+            onPress={() => setAssetAction(null)}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={() => {}}
+              style={{ width: '88%', maxWidth: 320, backgroundColor: '#0a0a0a', borderWidth: 1, borderColor: '#222', borderRadius: 10, padding: 16 }}
+            >
+              <Text style={{ color: '#eee', fontSize: 16, fontFamily: 'Iceland_400Regular' }}>
+                {assetMeta(assetAction || 'DAI').display}
+              </Text>
+              {!!assetAction && !!CHAIN_ASSETS[assetAction] && (
+                <Text style={{ color: '#666', fontSize: 12, fontFamily: 'Iceland_400Regular', marginTop: 2 }}>
+                  {[CHAIN_ASSETS[assetAction].name, CHAIN_ASSETS[assetAction].country].filter(Boolean).join(' · ')}
+                </Text>
+              )}
+              <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
+                {[
+                  { label: t('asset.send'), fn: () => { setSendCurrency(assetAction); setCurrentScreen('send'); } },
+                  { label: t('asset.receive'), fn: () => setCurrentScreen('receive') },
+                  { label: t('asset.p2p'), fn: () => { setP2pFilter(assetAction); setP2pScreen('p2p'); setCurrentScreen('p2p'); } },
+                ].map(b => (
+                  <TouchableOpacity
+                    key={b.label}
+                    style={{ flex: 1, paddingVertical: 10, borderRadius: 6, borderWidth: 1, borderColor: '#1a3a27', backgroundColor: '#052e16', alignItems: 'center' }}
+                    onPress={() => { const ticker = assetAction; setAssetAction(null); b.fn(); }}
+                  >
+                    <Text style={{ color: '#22c55e', fontFamily: 'Iceland_400Regular', fontSize: 13 }}>{b.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
       </SafeAreaView>
     );
   }
@@ -1222,7 +1327,7 @@ export default function DAIMinerWallet() {
     return (
       <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
         <StatusBar barStyle="light-content" />
-        <Header title={t('send.title')} t={t} onSettingsPress={() => setCurrentScreen('settings')} />
+        <Header title={t('send.title')} t={t} onSettingsPress={openSettings} />
         <ScrollView contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 10 }} keyboardShouldPersistTaps="handled">
 
           <Text style={styles.fieldLabel}>TO</Text>
@@ -1368,7 +1473,7 @@ export default function DAIMinerWallet() {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
-        <Header title={t('receive.title')} t={t} onSettingsPress={() => setCurrentScreen('settings')} />
+        <Header title={t('receive.title')} t={t} onSettingsPress={openSettings} />
 
         <View style={[styles.card, { alignItems: 'center', paddingVertical: 32 }]}>
           <Text style={styles.sectionTitle}>RECEIVE</Text>
@@ -1401,7 +1506,7 @@ export default function DAIMinerWallet() {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" />
-        <Header title={t('history.title')} t={t} onSettingsPress={() => setCurrentScreen('settings')} />
+        <Header title={t('history.title')} t={t} onSettingsPress={openSettings} />
         <FlatList
           data={txs}
           keyExtractor={(item, i) => item.id || String(i)}
@@ -1477,7 +1582,7 @@ export default function DAIMinerWallet() {
     return (
       <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
         <StatusBar barStyle="light-content" />
-        <Header title={t('wallets.title')} t={t} onSettingsPress={() => setCurrentScreen('settings')} />
+        <Header title={t('wallets.title')} t={t} onSettingsPress={openSettings} />
         <ScrollView contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 10 }} keyboardShouldPersistTaps="handled">
           {wallets.length === 0 && (
             <Text style={{ color: '#4b5563', marginBottom: 20, fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>{t('wallets.none')}</Text>
@@ -1532,7 +1637,7 @@ export default function DAIMinerWallet() {
     return (
       <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
         <StatusBar barStyle="light-content" />
-        <Header title="Ask AI" t={t} onSettingsPress={() => setCurrentScreen('settings')} />
+        <Header title="Ask AI" t={t} onSettingsPress={openSettings} />
         <View style={{ flex: 1, backgroundColor: '#000' }}>
           <ChatScreen
             activeNodeUrl={activeNodeUrl}
@@ -1548,40 +1653,45 @@ export default function DAIMinerWallet() {
   }
 
   if (currentScreen === 'settings') {
+    const settingsMenuRow = (label, sub, onPress) => (
+      <TouchableOpacity
+        key={label}
+        onPress={onPress}
+        style={[styles.walletRow, { justifyContent: 'space-between' }]}
+      >
+        <View style={{ flex: 1, paddingRight: 12 }}>
+          <Text style={styles.walletAddr}>{label}</Text>
+          {sub ? <Text style={{ color: '#6b7280', fontSize: 13, fontFamily: 'Iceland_400Regular', marginTop: 2 }}>{sub}</Text> : null}
+        </View>
+        <Text style={{ color: '#6b7280', fontSize: 22, fontFamily: 'Iceland_400Regular' }}>›</Text>
+      </TouchableOpacity>
+    );
+
+    if (settingsTab === 'menu') {
+      const lang = SUPPORTED_LANGUAGES.find(l => l.code === language);
+      return (
+        <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
+          <StatusBar barStyle="light-content" />
+          <Header title={t('settings.title')} t={t} onSettingsPress={openSettings} />
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 140, paddingHorizontal: 10 }}>
+            {settingsMenuRow(t('settings.nodes_tab'), null, () => setSettingsTab('nodes'))}
+            {settingsMenuRow(t('settings.language_tab'), lang ? lang.nativeName : language, () => setSettingsTab('language'))}
+            {settingsMenuRow(t('settings.display_currency'), displayCurrency, () => setSettingsTab('display'))}
+            {settingsMenuRow(t('settings.wallets_tab'), null, () => setSettingsTab('wallets'))}
+            {settingsMenuRow(t('settings.danger_tab'), null, () => setSettingsTab('danger'))}
+          </ScrollView>
+          <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
+        </SafeAreaView>
+      );
+    }
+
     return (
       <SafeAreaView style={styles.container} onLayout={onLayoutRootView}>
         <StatusBar barStyle="light-content" />
-        <Header title="Settings" t={t} onSettingsPress={() => setCurrentScreen('settings')} />
-
-        {/* Segmented tabs */}
-        <View style={{ flexDirection: 'row', marginBottom: 16, marginHorizontal: 10, backgroundColor: '#111', borderRadius: 4, padding: 3 }}>
-          {[
-            { key: 'nodes',    label: t('settings.nodes_tab') },
-            { key: 'language', label: t('settings.language_tab') },
-            { key: 'wallets',  label: 'Wallets' },
-            { key: 'danger',   label: t('settings.danger_tab') },
-          ].map(tab => (
-            <TouchableOpacity
-              key={tab.key}
-              style={{
-                flex: 1, paddingVertical: 9, borderRadius: 3, alignItems: 'center',
-                backgroundColor: settingsTab === tab.key
-                  ? (tab.key === 'danger' ? '#ef4444' : '#22c55e')
-                  : 'transparent',
-              }}
-              onPress={() => setSettingsTab(tab.key)}
-            >
-              <Text style={{
-                color: settingsTab === tab.key
-                  ? (tab.key === 'danger' ? '#fff' : '#000')
-                  : (tab.key === 'danger' ? '#ef4444' : '#9ca3af'),
-                fontWeight: '700', fontFamily: 'Iceland_400Regular', lineHeight: 19, fontSize: 13,
-              }}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        <Header title={t('settings.title')} t={t} onSettingsPress={openSettings} />
+        <TouchableOpacity onPress={() => setSettingsTab('menu')} style={{ paddingHorizontal: 10, paddingBottom: 10 }}>
+          <Text style={{ color: '#22c55e', fontFamily: 'Iceland_400Regular', fontSize: 15 }}>← {t('settings.title')}</Text>
+        </TouchableOpacity>
 
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 140, paddingHorizontal: 10 }} keyboardShouldPersistTaps="handled">
           {settingsTab === 'nodes' ? (
@@ -1628,18 +1738,18 @@ export default function DAIMinerWallet() {
                 style={styles.input}
                 placeholder={t('settings.node_placeholder')}
                 placeholderTextColor="#4b5563"
-                value={importKey}
-                onChangeText={setImportKey}
+                value={nodeUrlInput}
+                onChangeText={setNodeUrlInput}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
               <TouchableOpacity style={styles.primaryBtn} onPress={async () => {
-                if (!importKey.trim()) return;
-                const newNode = { url: importKey.trim() };
+                if (!nodeUrlInput.trim()) return;
+                const newNode = { url: nodeUrlInput.trim() };
                 const newNodes = [...nodes, newNode];
                 setNodes(newNodes);
                 await Storage.saveNodes(newNodes);
-                setImportKey('');
+                setNodeUrlInput('');
                 if (!activeNodeUrl) {
                   setActiveNodeUrl(newNode.url);
                   await Storage.saveActiveNodeUrl(newNode.url);
@@ -1683,6 +1793,30 @@ export default function DAIMinerWallet() {
                       <Text style={{ color: '#4b5563', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>{lang.name}</Text>
                     </View>
                     {isActiveLang && (
+                      <Text style={{ color: '#22c55e', fontFamily: 'Iceland_400Regular', lineHeight: 22, fontSize: 15 }}>{t('lang.current')}</Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </>
+          ) : settingsTab === 'display' ? (
+            <>
+              <Text style={{ color: '#4b5563', marginBottom: 12, fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 19 }}>
+                {t('settings.display_currency_desc')}
+              </Text>
+              {displayCurrencyOptions.map((row) => {
+                const isActive = row.code === displayCurrency;
+                return (
+                  <TouchableOpacity
+                    key={row.code}
+                    style={[styles.walletRow, isActive && { borderColor: '#22c55e', borderWidth: 1 }, { paddingVertical: 10 }]}
+                    onPress={() => changeDisplayCurrency(row.code)}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.walletAddr}>{row.code}</Text>
+                      <Text style={{ color: '#4b5563', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>{row.label}</Text>
+                    </View>
+                    {isActive && (
                       <Text style={{ color: '#22c55e', fontFamily: 'Iceland_400Regular', lineHeight: 22, fontSize: 15 }}>{t('lang.current')}</Text>
                     )}
                   </TouchableOpacity>
@@ -1831,7 +1965,7 @@ export default function DAIMinerWallet() {
       return (
         <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} onLayout={onLayoutRootView}>
           <StatusBar barStyle="light-content" backgroundColor="#000" />
-          <Header title="Pair a site" t={t} onSettingsPress={() => setCurrentScreen('settings')} />
+          <Header title="Pair a site" t={t} onSettingsPress={openSettings} />
           <PairScreen
             wallets={wallets}
             selectedAddress={selectedAddress}
@@ -1857,7 +1991,7 @@ export default function DAIMinerWallet() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }} onLayout={onLayoutRootView}>
         <StatusBar barStyle="light-content" backgroundColor="#000" />
-        <P2PScreen {...commonProps} />
+        <P2PScreen key={p2pFilter || 'all'} {...commonProps} initialCurrency={p2pFilter} />
         <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
       </SafeAreaView>
     );

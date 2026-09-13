@@ -32,8 +32,10 @@ function timeAgo(ts) {
   return `${Math.floor(diff / 3600000)}h ago`;
 }
 
-export default function P2PScreen({ selectedAddress, activeNodeUrl, onNavigate }) {
-  const [currency, setCurrency] = useState(ALL);
+export default function P2PScreen({ selectedAddress, activeNodeUrl, onNavigate, initialCurrency }) {
+  const [currency, setCurrency] = useState(
+    initialCurrency && initialCurrency !== 'DAI' ? initialCurrency : ALL,
+  );
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);

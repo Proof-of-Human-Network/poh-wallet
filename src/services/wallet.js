@@ -8,8 +8,8 @@ import { deriveSigningKeypair } from './signing';
  * Must produce addresses that allow /api/wallet/register-key and /api/tx/submit to succeed.
  */
 export async function deriveFromPrivateKey(privateKeyHex) {
-  if (!privateKeyHex || privateKeyHex.length < 32) {
-    throw new Error('Private key must be at least 32 hex chars');
+  if (!privateKeyHex || !/^[0-9a-fA-F]{64}$/.test(privateKeyHex)) {
+    throw new Error('Private key must be 64 hex characters');
   }
 
   // Derive the ed25519 signing keypair (raw b64 public key as used in txs/register)

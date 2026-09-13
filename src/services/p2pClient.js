@@ -77,6 +77,9 @@ export async function createOrder(nodeUrl, { address, privateKeyHex, side, daiAm
     daiAmount,
     pricePerDAI,
     paymentMethods: paymentMethods || [],
+    minTrade: minTrade ?? 0,
+    maxTrade: maxTrade ?? null,
+    baseDecimals: baseDecimals ?? null,
   });
   const body = { ...auth, side, daiAmount, ...(baseAsset && baseAsset !== 'DAI' ? { baseAsset, baseDecimals } : {}), quoteCurrency, pricePerDAI, minTrade, maxTrade, paymentMethods };
   const res = await fetch(`${nodeUrl}/api/p2p/orders`, {

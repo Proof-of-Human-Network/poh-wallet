@@ -84,7 +84,9 @@ export default function CreateOrderScreen({ selectedAddress, activeNodeUrl, getP
     if (!dai || dai <= 0) return Alert.alert('Invalid', `Enter a valid ${assetMeta(baseAsset).display} amount.`);
     if (!price || price <= 0) return Alert.alert('Invalid', 'Enter a valid price.');
     if (baseAsset === quoteCurrency) return Alert.alert('Invalid', 'Sell asset and payment currency must differ.');
-    const validMethods = atomic ? [] : methods.filter(m => m.network.trim());
+    const validMethods = atomic
+      ? [{ network: 'DAI', address: selectedAddress }]
+      : methods.filter(m => m.network.trim());
     if (!atomic && validMethods.length === 0) return Alert.alert('Invalid', 'Add at least one payment method.');
 
     // Trade limits, checked with the other pre-flight validation so an
