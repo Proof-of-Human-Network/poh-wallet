@@ -1180,103 +1180,113 @@ export default function DAIMinerWallet() {
         <StatusBar barStyle="light-content" />
         <Header t={t} onSettingsPress={openSettings} />
 
-        {/* Balance card */}
-        <View style={styles.card}>
-          <Text style={styles.label}>AVAILABLE BALANCE</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: 6 }}>
-            {/* 4dp, not 2: mining pays out in fractions of a DAI, and at two
-                decimals a real balance like 0.0010 rendered as "0.00" and read
-                as empty. The USD line below stays at 2dp, where cents are the
-                natural unit. */}
-            <Text style={styles.balance}>{currentBalance.toFixed(4)}</Text>
-            <Text style={styles.balanceCurrency}> DAI</Text>
-          </View>
-          {daiConverted != null && (
-            <Text style={styles.usd}>≈ {formatDisplayAmount(daiConverted)}</Text>
-          )}
-          {/* Stablecoin holdings — same two-line rows as the currency picker,
-              so a ticker you do not recognise still tells you what it is. */}
-          <AssetBalanceList
-            balances={assetBalances[selectedAddress] || {}}
-            converted={convertedBalances}
-            displayCurrency={displayCurrency}
-            onPressAsset={(ticker) => setAssetAction(ticker)}
-          />
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
-            {loading && <ActivityIndicator color="#22c55e" size="small" style={{ marginRight: 8 }} />}
-            <TouchableOpacity onPress={copyAddress} style={{ flex: 1 }}>
-              <Text style={styles.addressSmall} numberOfLines={1}>
-                {selectedAddress
-                  ? `${selectedAddress.slice(0, 8)}…${selectedAddress.slice(-6)}`
-                  : t('home.no_wallet')}
-              </Text>
-            </TouchableOpacity>
-            {lastSync && <Text style={styles.sync}>{lastSync.toLocaleTimeString()}</Text>}
-          </View>
-        </View>
+        {/* One scroller for the whole screen: the tx list. The balance card and
+            actions ride along as its header rather than sitting above it in a
+            fixed column — with 161 possible stablecoins the card alone can be
+            taller than the phone, and a fixed column simply clipped everything
+            below it with nothing to scroll. Header content must NOT go in a
+            ScrollView wrapped around this list: nesting a VirtualizedList in a
+            ScrollView breaks recycling and the inner list stops scrolling. */}
+        <FlatList
+          data={txs.slice(0, 8)}
+          keyExtractor={(item, idx) => item.id || String(idx)}
+          contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: 20 }}
+          keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={
+            <>
+            {/* Balance card */}
+            <View style={styles.card}>
+              <Text style={styles.label}>AVAILABLE BALANCE</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginTop: 6 }}>
+                {/* 4dp, not 2: mining pays out in fractions of a DAI, and at two
+                    decimals a real balance like 0.0010 rendered as "0.00" and read
+                    as empty. The USD line below stays at 2dp, where cents are the
+                    natural unit. */}
+                <Text style={styles.balance}>{currentBalance.toFixed(4)}</Text>
+                <Text style={styles.balanceCurrency}> DAI</Text>
+              </View>
+              {daiConverted != null && (
+                <Text style={styles.usd}>≈ {formatDisplayAmount(daiConverted)}</Text>
+              )}
+              {/* Stablecoin holdings — same two-line rows as the currency picker,
+                  so a ticker you do not recognise still tells you what it is. */}
+              <AssetBalanceList
+                balances={assetBalances[selectedAddress] || {}}
+                converted={convertedBalances}
+                displayCurrency={displayCurrency}
+                onPressAsset={(ticker) => setAssetAction(ticker)}
+              />
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+                {loading && <ActivityIndicator color="#22c55e" size="small" style={{ marginRight: 8 }} />}
+                <TouchableOpacity onPress={copyAddress} style={{ flex: 1 }}>
+                  <Text style={styles.addressSmall} numberOfLines={1}>
+                    {selectedAddress
+                      ? `${selectedAddress.slice(0, 8)}…${selectedAddress.slice(-6)}`
+                      : t('home.no_wallet')}
+                  </Text>
+                </TouchableOpacity>
+                {lastSync && <Text style={styles.sync}>{lastSync.toLocaleTimeString()}</Text>}
+              </View>
+            </View>
 
-        {/* Action row */}
-        <View style={styles.actions}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => setCurrentScreen('send')}>
-            <Text style={styles.actionIcon}>↑</Text>
-            <Text style={styles.actionText}>{t('action.send')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => setCurrentScreen('receive')}>
-            <Text style={styles.actionIcon}>↓</Text>
-            <Text style={styles.actionText}>{t('action.receive')}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Recent */}
-        <View style={styles.section}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <Text style={styles.sectionTitle}>RECENT</Text>
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <TouchableOpacity onPress={rebuildBalance}>
-                <Text style={{ color: '#a78bfa', fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 19 }}>Rebuild</Text>
+            {/* Action row */}
+            <View style={styles.actions}>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => setCurrentScreen('send')}>
+                <Text style={styles.actionIcon}>↑</Text>
+                <Text style={styles.actionText}>{t('action.send')}</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => refreshAll(false)}>
-                <Text style={{ color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>{t('home.refresh')}</Text>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => setCurrentScreen('receive')}>
+                <Text style={styles.actionIcon}>↓</Text>
+                <Text style={styles.actionText}>{t('action.receive')}</Text>
               </TouchableOpacity>
             </View>
-          </View>
-          <FlatList
-            data={txs.slice(0, 8)}
-            keyExtractor={(item, idx) => item.id || String(idx)}
-            contentContainerStyle={{ paddingBottom: 20 }}
-            renderItem={({ item }) => {
-              const isOut = item.from === selectedAddress;
-              const isMining = item.type === 'mining' || item.type === 'reward';
-              const counterparty = isOut ? item.to : item.from;
-              return (
-                <View style={styles.txRow}>
-                  <View style={[styles.txCircle, isOut && { backgroundColor: '#160a0a' }]}>
-                    <Text style={{ fontSize: 13, color: isMining ? '#22c55e' : isOut ? '#ef4444' : '#22c55e' }}>
-                      {isMining ? '⛏' : isOut ? '↑' : '↓'}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.txType}>{item.type || (isOut ? t('history.sent') : t('history.received'))}</Text>
-                    <Text style={styles.txAddr} numberOfLines={1}>
-                      {counterparty ? `${counterparty.slice(0, 8)}…${counterparty.slice(-4)}` : (item.status || t('status.confirmed'))}
-                    </Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={[styles.txAmount, isOut && { color: '#ef4444' }]}>
-                      {isOut ? '-' : '+'}{Number(item.amount || 0).toFixed(2)}
-                    </Text>
-                    <Text style={styles.txStatus}>DAI</Text>
-                  </View>
+
+            {/* Recent */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <Text style={styles.sectionTitle}>RECENT</Text>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity onPress={rebuildBalance}>
+                  <Text style={{ color: '#a78bfa', fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 19 }}>Rebuild</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => refreshAll(false)}>
+                  <Text style={{ color: '#22c55e', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20 }}>{t('home.refresh')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            </>
+          }
+          renderItem={({ item }) => {
+            const isOut = item.from === selectedAddress;
+            const isMining = item.type === 'mining' || item.type === 'reward';
+            const counterparty = isOut ? item.to : item.from;
+            return (
+              <View style={styles.txRow}>
+                <View style={[styles.txCircle, isOut && { backgroundColor: '#160a0a' }]}>
+                  <Text style={{ fontSize: 13, color: isMining ? '#22c55e' : isOut ? '#ef4444' : '#22c55e' }}>
+                    {isMining ? '⛏' : isOut ? '↑' : '↓'}
+                  </Text>
                 </View>
-              );
-            }}
-            ListEmptyComponent={
-              <Text style={{ color: '#374151', marginTop: 8, fontSize: 15, fontFamily: 'Iceland_400Regular', lineHeight: 22 }}>
-                {t('home.no_tx')}
-              </Text>
-            }
-          />
-        </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.txType}>{item.type || (isOut ? t('history.sent') : t('history.received'))}</Text>
+                  <Text style={styles.txAddr} numberOfLines={1}>
+                    {counterparty ? `${counterparty.slice(0, 8)}…${counterparty.slice(-4)}` : (item.status || t('status.confirmed'))}
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={[styles.txAmount, isOut && { color: '#ef4444' }]}>
+                    {isOut ? '-' : '+'}{Number(item.amount || 0).toFixed(2)}
+                  </Text>
+                  <Text style={styles.txStatus}>DAI</Text>
+                </View>
+              </View>
+            );
+          }}
+          ListEmptyComponent={
+            <Text style={{ color: '#374151', marginTop: 8, fontSize: 15, fontFamily: 'Iceland_400Regular', lineHeight: 22 }}>
+              {t('home.no_tx')}
+            </Text>
+          }
+        />
 
         <TabBar currentScreen={currentScreen} onTabPress={handleTabPress} t={t} />
 
@@ -1475,7 +1485,7 @@ export default function DAIMinerWallet() {
         <StatusBar barStyle="light-content" />
         <Header title={t('receive.title')} t={t} onSettingsPress={openSettings} />
 
-        <View style={[styles.card, { alignItems: 'center', paddingVertical: 32 }]}>
+        <View style={[styles.card, { marginHorizontal: 10, alignItems: 'center', paddingVertical: 32 }]}>
           <Text style={styles.sectionTitle}>RECEIVE</Text>
           {selectedAddress ? (
             <View style={{ backgroundColor: '#fff', padding: 14, borderRadius: 4, marginTop: 16 }}>
@@ -2008,13 +2018,13 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, color: '#fff', fontFamily: 'Iceland_400Regular', lineHeight: 29 },
   settingsIcon: { color: '#6b7280', fontSize: 18 },
 
-  // Balance card
+  // Balance card. No horizontal gutter of its own — on home it sits inside a
+  // list that already pads, and the receive screen adds its own margin.
   card: {
     backgroundColor: '#0f1a0f',
     padding: 20,
     borderRadius: 16,
     marginBottom: 12,
-    marginHorizontal: 10,
     borderWidth: 1,
     borderColor: 'rgba(34,197,94,0.35)',
   },
@@ -2026,13 +2036,12 @@ const styles = StyleSheet.create({
   sync: { color: '#374151', fontSize: 13, fontFamily: 'Iceland_400Regular', lineHeight: 19 },
 
   // Action row
-  actions: { flexDirection: 'row', gap: 8, marginBottom: 16, marginHorizontal: 10 },
+  actions: { flexDirection: 'row', gap: 8, marginBottom: 16 },
   actionBtn: { flex: 1, backgroundColor: '#111', paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
   actionIcon: { color: '#fff', fontSize: 20, marginBottom: 4 },
   actionText: { color: '#9ca3af', fontSize: 14, fontFamily: 'Iceland_400Regular', lineHeight: 20 },
 
   // Section
-  section: { flex: 1, marginBottom: 12, marginHorizontal: 10 },
   sectionTitle: { color: '#4b5563', fontSize: 13, letterSpacing: 1.5, fontFamily: 'Iceland_400Regular', lineHeight: 18 },
 
   // Tx rows

@@ -69,8 +69,13 @@ export async function createOrder(nodeUrl, { address, privateKeyHex, side, daiAm
   // re-serialises it, and JSON.stringify preserves insertion order. The
   // defaults ('DAI', []) must match the node's `|| 'DAI'` / `|| []` exactly or
   // the two strings differ and every signature fails.
-  const auth = await buildAuth(address, signingPublicKey, secretKey, {
-    action: 'create-order',
+  //
+  // ONE object for both the signature and the wire, never two. The body used to
+  // drop baseAsset/baseDecimals on DAI orders while the signature still carried
+  // baseDecimals: 9; the node re-derived `baseDecimals ?? null` from what it
+  // actually received, hashed a different string, and every DAI order from this
+  // wallet came back "invalid signature".
+  const fields = {
     side,
     baseAsset: baseAsset || 'DAI',
     quoteCurrency,
@@ -80,8 +85,9 @@ export async function createOrder(nodeUrl, { address, privateKeyHex, side, daiAm
     minTrade: minTrade ?? 0,
     maxTrade: maxTrade ?? null,
     baseDecimals: baseDecimals ?? null,
-  });
-  const body = { ...auth, side, daiAmount, ...(baseAsset && baseAsset !== 'DAI' ? { baseAsset, baseDecimals } : {}), quoteCurrency, pricePerDAI, minTrade, maxTrade, paymentMethods };
+  };
+  const auth = await buildAuth(address, signingPublicKey, secretKey, { action: 'create-order', ...fields });
+  const body = { ...auth, ...fields };
   const res = await fetch(`${nodeUrl}/api/p2p/orders`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -114,8 +114,8 @@ android {
         applicationId 'com.dai.wallet'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 10
-        versionName "0.4.7"
+        versionCode 11
+        versionName "0.4.8"
     }
     signingConfigs {
         debug {
